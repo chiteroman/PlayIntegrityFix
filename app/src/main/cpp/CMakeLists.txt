@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project(zygisk)
 
-include_directories(libcxx/include libcxx/include/abi)
+include_directories(libcxx/include)
 
 link_libraries(${CMAKE_SOURCE_DIR}/libcxx/${CMAKE_ANDROID_ARCH_ABI}.a)
 

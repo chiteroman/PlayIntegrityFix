@@ -14,7 +14,7 @@
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-std::map<void *, T_Callback> map;
+static std::map<void *, T_Callback> map;
 
 static void
 handle_system_property(void *cookie, const char *name, const char *value, uint32_t serial) {
@@ -87,7 +87,7 @@ public:
 
         auto fd = api->connectCompanion();
 
-        long size = -1;
+        long size;
         read(fd, &size, sizeof(size));
 
         char buffer[size];
