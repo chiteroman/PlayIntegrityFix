@@ -5,16 +5,32 @@
 #include <sys/system_properties.h>
 #include <string_view>
 #include <vector>
-#include <map>
 
 #include "zygisk.hpp"
+
+#if defined(__arm__)
+
+#include "shadowhook.h"
+
+#elif defined(__aarch64__)
+
+#include "shadowhook.h"
+
+#elif defined(__i386__)
+
 #include "dobby.h"
+
+#elif defined(__x86_64__)
+
+#include "dobby.h"
+
+#endif
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "SNFix/JNI", __VA_ARGS__)
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> map;
+static volatile T_Callback o_callback;
 
 static void
 handle_system_property(void *cookie, const char *name, const char *value, uint32_t serial) {
@@ -31,7 +47,7 @@ handle_system_property(void *cookie, const char *name, const char *value, uint32
 
     if (!prop.starts_with("cache")) LOGD("[%s] -> %s", name, value);
 
-    map[cookie](cookie, name, value, serial);
+    o_callback(cookie, name, value, serial);
 }
 
 static void (*o_hook)(const prop_info *, T_Callback, void *);
@@ -41,18 +57,45 @@ static void my_hook(const prop_info *pi, T_Callback callback, void *cookie) {
         o_hook(pi, callback, cookie);
         return;
     }
-    map[cookie] = callback;
+    o_callback = callback;
     o_hook(pi, handle_system_property, cookie);
 }
 
 static void createHook() {
     LOGD("Trying to get __system_property_read_callback handle...");
-    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+    void *handle;
+
+
+#if defined(__arm__)
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+    handle = shadowhook_hook_sym_name(
+            "libc.so",
+            "__system_property_read_callback",
+            (void *) my_hook,
+            (void **) &o_hook
+    );
+#elif defined(__aarch64__)
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+    handle = shadowhook_hook_sym_name(
+            "libc.so",
+            "__system_property_read_callback",
+            (void *) my_hook,
+            (void **) &o_hook
+    );
+#elif defined(__i386__)
+    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+#elif defined(__x86_64__)
+    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+#endif
     if (handle == nullptr) {
         LOGD("Couldn't get __system_property_read_callback, report to @chiteroman");
         return;
     }
-    DobbyHook(handle, (void *) my_hook, (void **) &o_hook);
+#if defined(__i386__)
+        DobbyHook(handle, (void *) my_hook, (void **) &o_hook);
+#elif defined(__x86_64__)
+        DobbyHook(handle, (void *) my_hook, (void **) &o_hook);
+#endif
     LOGD("Hooked __system_property_read_callback at %p", handle);
 }
 
