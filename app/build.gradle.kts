@@ -18,6 +18,13 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_STL=none"
+                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
+            }
+        }
     }
 
     buildTypes {
@@ -34,8 +41,9 @@ android {
     }
 
     externalNativeBuild {
-        ndkBuild {
-            path = file("src/main/cpp/Android.mk")
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 
