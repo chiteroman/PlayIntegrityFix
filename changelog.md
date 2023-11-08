@@ -1,3 +1,3 @@
-# v9.9
+# v12
 
-Fix crash issues in few devices.
+Fixed MEETS_DEVICE_INTEGRITY 🥳

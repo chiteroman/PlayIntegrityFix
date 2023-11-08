@@ -5,27 +5,36 @@
 #include <sys/system_properties.h>
 
 #include "zygisk.hpp"
+
+#if defined(__arm__)
+
+#include "shadowhook.h"
+
+#elif defined(__aarch64__)
+
+#include "shadowhook.h"
+
+#elif defined(__i386__)
+
 #include "dobby.h"
 
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
+#elif defined(__x86_64__)
+
+#include "dobby.h"
+
+#endif
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
 void (*o_callback)(void *, const char *, const char *, uint32_t);
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (name != nullptr) {
-        if (strcmp(name, "ro.product.first_api_level") == 0) value = "25";
-        else if (strcmp(name, "ro.boot.flash.locked") == 0 || strcmp(name, "ro.secure") == 0)
-            value = "1";
-        else if (strcmp(name, "ro.boot.vbmeta.device_state") == 0) value = "locked";
-        else if (strcmp(name, "ro.boot.verifiedbootstate") == 0) value = "green";
-        else if (strcmp(name, "ro.debuggable") == 0) value = "0";
-        else if (strcmp(name, "sys.usb.state") == 0) value = "none";
+    if (strcmp(name, "ro.product.first_api_level") == 0) value = "24";
 
-        if (strncmp(name, "cache", 5) != 0) LOGD("[%s] -> %s", name, value);
-    }
+    if (strncmp(name, "cache", 5) != 0) LOGD("[%s] -> %s | (%p) (%d)", name, value, cookie, serial);
 
-    o_callback(cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *,
@@ -43,21 +52,37 @@ static void my_system_property_read_callback(const prop_info *pi,
 
 static void doHook() {
     LOGD("Starting to hook...");
-    auto handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+    void *handle;
+
+#if defined(__arm__)
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+    handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
+                                      (void *) my_system_property_read_callback,
+                                      (void **) &o_system_property_read_callback);
+#elif defined(__aarch64__)
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+    handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
+                                      (void *) my_system_property_read_callback,
+                                      (void **) &o_system_property_read_callback);
+#elif defined(__i386__)
+    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+#elif defined(__x86_64__)
+    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+#endif
+
     if (handle == nullptr) {
-        LOGD("Couldn't find __system_property_read_callback handle, report to @chiteroman");
-        return;
-    }
-    auto res = DobbyHook(
-            handle,
-            (void *) my_system_property_read_callback,
-            (void **) &o_system_property_read_callback
-    );
-    if (res == 0) {
-        LOGD("Hooked __system_property_read_callback handle at %p", handle);
+        LOGD("Couldn't get __system_property_read_callback handle.");
     } else {
-        LOGD("Couldn't hook __system_property_read_callback, report to @chiteroman");
+        LOGD("Got __system_property_read_callback handle and hooked it at %p", handle);
     }
+
+#if defined(__i386__)
+    DobbyHook(handle, (void *) my_system_property_read_callback,
+              (void **) &o_system_property_read_callback);
+#elif defined(__x86_64__)
+    DobbyHook(handle, (void *) my_system_property_read_callback,
+              (void **) &o_system_property_read_callback);
+#endif
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -103,12 +128,11 @@ public:
         close(fd);
 
         moduleDex[moduleDexSize] = 0;
-
-        doHook();
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (moduleDex == nullptr || moduleDexSize == 0) return;
+        doHook();
         injectDex();
     }
 

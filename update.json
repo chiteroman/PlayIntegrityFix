@@ -1,6 +1,6 @@
 {
-    "version": "v9.9",
-    "versionCode": 99,
-    "zipUrl": "https://github.com/chiteroman/PlayIntegrityFix/releases/download/v9.9/PlayIntegrityFix_v9.9.zip",
+    "version": "v12",
+    "versionCode": 120,
+    "zipUrl": "https://github.com/chiteroman/PlayIntegrityFix/releases/download/v12/PlayIntegrityFix_v12.zip",
     "changelog": "https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/changelog.md"
 }
