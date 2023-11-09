@@ -1,0 +1,18 @@
+BasedOnStyle: LLVM
+
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 120
+
+FixNamespaceComments: true
+
+# default is false
+#AlignConsecutiveMacros: true
+#AlignConsecutiveAssignments: true
+#AlignConsecutiveDeclarations: true
+
+# default is true
+ReflowComments: false
+SortIncludes : false
+AllowShortFunctionsOnASingleLine: false

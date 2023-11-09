@@ -1,0 +1,114 @@
+name: Builder
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  CMAKE_VERSION: 3.25.2
+  LLVM_VERSION: 15.0.6
+  NDK_VERSION: r25b
+
+jobs:
+  delete_latest_release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout master
+      uses: actions/checkout@master
+
+    - name: delete latest release
+      uses: dev-drprasad/delete-tag-and-release@v0.2.1
+      with:
+        delete_release: true
+        tag_name: latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  linux_and_android:
+    runs-on: ubuntu-latest
+    needs: delete_latest_release
+    steps:
+    - name: checkout master
+      uses: actions/checkout@master
+
+    - name: init linux cross compile env
+      run: |
+        sh scripts/setup_linux_cross_compile.sh
+        mkdir -p artifact
+      shell: bash
+
+    - name: compile linux
+      run: |
+        python3 scripts/platform_builder.py --platform=linux --arch=all --cmake_dir=$HOME/opt/cmake-$CMAKE_VERSION --llvm_dir=$HOME/opt/llvm-$LLVM_VERSION
+        cp include/dobby.h build/linux
+        tar -zcvf build/dobby-linux-all.tar.gz build/linux
+        cp build/dobby-linux-all.tar.gz artifact/
+        
+      shell: bash
+    
+    - name: compile android
+      run: |
+        python3 scripts/platform_builder.py --platform=android --arch=all --cmake_dir=$HOME/opt/cmake-$CMAKE_VERSION --llvm_dir=$HOME/opt/llvm-$LLVM_VERSION --android_ndk_dir=$HOME/opt/ndk-$NDK_VERSION
+        cp include/dobby.h build/android
+        tar -zcvf build/dobby-android-all.tar.gz build/android
+        cp build/dobby-android-all.tar.gz artifact/
+      shell: bash
+
+    - name: print output
+      run: |
+        ls -lha .
+
+    - name: update release
+      uses: ncipollo/release-action@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        tag: latest
+        body: "a lightweight, multi-platform, multi-architecture exploit hook framework"
+        artifacts: "build/dobby-linux-all.tar.gz,build/dobby-android-all.tar.gz"
+        allowUpdates: true
+        replacesArtifacts: true
+
+  macos_and_iphoneos:
+    runs-on: macos-latest
+    needs: delete_latest_release
+    steps:
+    - name: checkout dev
+      uses: actions/checkout@master
+
+    - name: init macos compile env
+      run: |
+        sh scripts/setup_macos_cross_compile.sh
+        mkdir -p artifact
+      shell: bash
+
+    - name: compile macos
+      run: |
+        python3 scripts/platform_builder.py --platform=macos --arch=all --cmake_dir=$HOME/opt/cmake-$CMAKE_VERSION/CMake.app/Contents
+        cp include/dobby.h build/macos
+        tar -zcvf build/dobby-macos-all.tar.gz build/macos
+        cp build/dobby-macos-all.tar.gz artifact/
+        
+      shell: bash
+    
+    - name: compile iphoneos
+      run: |
+        python3 scripts/platform_builder.py --platform=iphoneos --arch=all --cmake_dir=$HOME/opt/cmake-$CMAKE_VERSION/CMake.app/Contents
+        cp include/dobby.h build/iphoneos
+        tar -zcvf build/dobby-iphoneos-all.tar.gz build/iphoneos
+        cp build/dobby-iphoneos-all.tar.gz artifact/
+      shell: bash
+
+    - name: print output
+      run: |
+        ls -lha .
+
+    - name: update release
+      uses: ncipollo/release-action@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        tag: latest
+        body: "a lightweight, multi-platform, multi-architecture exploit hook framework"
+        artifacts: "build/dobby-macos-all.tar.gz,build/dobby-iphoneos-all.tar.gz"
+        allowUpdates: true
+        replacesArtifacts: true

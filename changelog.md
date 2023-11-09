@@ -1,3 +1,3 @@
-# v12
+# v12.1
 
-Fixed MEETS_DEVICE_INTEGRITY 🥳
+Fix GMS crash in few devices using v12.

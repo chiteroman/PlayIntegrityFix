@@ -1,88 +1,74 @@
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <android/log.h>
 #include <sys/system_properties.h>
+#include <vector>
+#include <string>
+#include <map>
+#include <fstream>
 
 #include "zygisk.hpp"
-
-#if defined(__arm__)
-
-#include "shadowhook.h"
-
-#elif defined(__aarch64__)
-
-#include "shadowhook.h"
-
-#elif defined(__i386__)
-
 #include "dobby.h"
-
-#elif defined(__x86_64__)
-
-#include "dobby.h"
-
-#endif
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-void (*o_callback)(void *, const char *, const char *, uint32_t);
+inline static const std::map<std::string, std::string> PROPS_MAP = {
+        {"ro.product.first_api_level",  "24"},
+        {"ro.secure",                   "1"},
+        {"ro.debuggable",               "0"},
+        {"sys.usb.state",               "none"},
+        {"ro.boot.verifiedbootstate",   "green"},
+        {"ro.boot.flash.locked",        "1"},
+        {"ro.boot.vbmeta.device_state", "locked"}
+};
+
+typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
+
+static std::map<void *, T_Callback> map;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (strcmp(name, "ro.product.first_api_level") == 0) value = "24";
+    if (name != nullptr) {
+        std::string prop(name);
 
-    if (strncmp(name, "cache", 5) != 0) LOGD("[%s] -> %s | (%p) (%d)", name, value, cookie, serial);
+        if (PROPS_MAP.contains(prop)) value = PROPS_MAP.at(prop).c_str();
 
-    return o_callback(cookie, name, value, serial);
+        if (!prop.starts_with("cache")) LOGD("[%s] -> %s", name, value);
+
+        prop.clear();
+        prop.shrink_to_fit();
+    }
+
+    return map[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *,
-                                               void (*)(void *, const char *,
-                                                        const char *, uint32_t),
+                                               T_Callback,
                                                void *);
 
 static void my_system_property_read_callback(const prop_info *pi,
-                                             void (*callback)(void *cookie, const char *name,
-                                                              const char *value, uint32_t serial),
+                                             T_Callback callback,
                                              void *cookie) {
-    o_callback = callback;
+
+    if (pi == nullptr || callback == nullptr || cookie == nullptr) {
+        return o_system_property_read_callback(pi, callback, cookie);
+    }
+    map[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
     LOGD("Starting to hook...");
-    void *handle;
-
-#if defined(__arm__)
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
-    handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
-                                      (void *) my_system_property_read_callback,
-                                      (void **) &o_system_property_read_callback);
-#elif defined(__aarch64__)
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
-    handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
-                                      (void *) my_system_property_read_callback,
-                                      (void **) &o_system_property_read_callback);
-#elif defined(__i386__)
-    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
-#elif defined(__x86_64__)
-    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
-#endif
+    auto handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
 
     if (handle == nullptr) {
         LOGD("Couldn't get __system_property_read_callback handle.");
+        return;
     } else {
         LOGD("Got __system_property_read_callback handle and hooked it at %p", handle);
     }
 
-#if defined(__i386__)
     DobbyHook(handle, (void *) my_system_property_read_callback,
               (void **) &o_system_property_read_callback);
-#elif defined(__x86_64__)
-    DobbyHook(handle, (void *) my_system_property_read_callback,
-              (void **) &o_system_property_read_callback);
-#endif
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -93,47 +79,52 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        bool isGms = false;
-        bool isGmsUnstable = false;
+        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+        std::string process(rawProcess);
+        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
 
-        auto process = env->GetStringUTFChars(args->nice_name, nullptr);
+        if (process.starts_with("com.google.android.gms")) {
 
-        if (process != nullptr) {
-            isGms = strncmp(process, "com.google.android.gms", 22) == 0;
-            isGmsUnstable = strcmp(process, "com.google.android.gms.unstable") == 0;
+            api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+
+            if (process == "com.google.android.gms.unstable") {
+                isGmsUnstable = true;
+
+                int fd = api->connectCompanion();
+
+                long size;
+                read(fd, &size, sizeof(size));
+
+                if (size > 0) {
+
+                    LOGD("Received %ld bytes from socket", size);
+
+                    char buffer[size];
+                    read(fd, buffer, size);
+                    buffer[size] = 0;
+
+                    moduleDex.insert(moduleDex.end(), buffer, buffer + size);
+
+                } else {
+                    LOGD("Received invalid bytes from socket. Does classes.dex file exist?");
+                }
+
+                close(fd);
+            }
         }
 
-        env->ReleaseStringUTFChars(args->nice_name, process);
+        process.clear();
+        process.shrink_to_fit();
 
-        if (!isGms) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
-
-        if (!isGmsUnstable) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        auto fd = api->connectCompanion();
-
-        read(fd, &moduleDexSize, sizeof(moduleDexSize));
-
-        moduleDex = static_cast<char *>(malloc(moduleDexSize));
-
-        read(fd, moduleDex, moduleDexSize);
-
-        close(fd);
-
-        moduleDex[moduleDexSize] = 0;
+        if (!isGmsUnstable) api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (moduleDex == nullptr || moduleDexSize == 0) return;
+        if (!isGmsUnstable) return;
+
         doHook();
-        injectDex();
+
+        if (!moduleDex.empty()) injectDex();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -143,8 +134,8 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    char *moduleDex = nullptr;
-    long moduleDexSize = 0;
+    bool isGmsUnstable = false;
+    std::vector<char> moduleDex;
 
     void injectDex() {
         LOGD("get system classloader");
@@ -154,7 +145,7 @@ private:
         auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
         LOGD("create buffer");
-        auto buf = env->NewDirectByteBuffer(moduleDex, moduleDexSize);
+        auto buf = env->NewDirectByteBuffer(moduleDex.data(), static_cast<jlong>(moduleDex.size()));
         LOGD("create class loader");
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
@@ -173,7 +164,8 @@ private:
         env->CallStaticVoidMethod(entryClass, entryInit);
 
         LOGD("clean");
-        free(moduleDex);
+        moduleDex.clear();
+        moduleDex.shrink_to_fit();
         env->DeleteLocalRef(clClass);
         env->DeleteLocalRef(systemClassLoader);
         env->DeleteLocalRef(buf);
@@ -186,17 +178,24 @@ private:
 };
 
 static void companion(int fd) {
-    FILE *file = fopen("/data/adb/modules/playintegrityfix/classes.dex", "rb");
+    std::ifstream ifs("/data/adb/modules/playintegrityfix/classes.dex",
+                      std::ios::binary | std::ios::ate);
 
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    if (ifs.bad()) {
+        long i = -1;
+        write(fd, &i, sizeof(i));
+        close(fd);
+        return;
+    }
+
+    long size = ifs.tellg();
+    ifs.seekg(std::ios::beg);
 
     char buffer[size];
-    fread(buffer, size, 1, file);
-    fclose(file);
-
+    ifs.read(buffer, size);
     buffer[size] = 0;
+
+    ifs.close();
 
     write(fd, &size, sizeof(size));
     write(fd, buffer, size);

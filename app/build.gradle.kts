@@ -18,6 +18,26 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_STL=none"
+                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
+
+                cFlags += "-fvisibility=hidden"
+                cFlags += "-fvisibility-inlines-hidden"
+                cFlags += "-ffunction-sections"
+                cFlags += "-fdata-sections"
+
+                cppFlags += "-std=c++20"
+                cppFlags += "-fno-exceptions"
+                cppFlags += "-fno-rtti"
+                cppFlags += "-fvisibility=hidden"
+                cppFlags += "-fvisibility-inlines-hidden"
+                cppFlags += "-ffunction-sections"
+                cppFlags += "-fdata-sections"
+            }
+        }
     }
 
     buildTypes {
@@ -34,8 +54,8 @@ android {
     }
 
     externalNativeBuild {
-        ndkBuild {
-            path = file("src/main/cpp/Android.mk")
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 
