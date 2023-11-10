@@ -22,20 +22,13 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
-
-                cFlags += "-fvisibility=hidden"
-                cFlags += "-fvisibility-inlines-hidden"
-                cFlags += "-ffunction-sections"
-                cFlags += "-fdata-sections"
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
 
                 cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
                 cppFlags += "-fvisibility-inlines-hidden"
-                cppFlags += "-ffunction-sections"
-                cppFlags += "-fdata-sections"
             }
         }
     }
@@ -61,4 +54,8 @@ android {
 
     ndkVersion = "26.1.10909125"
     buildToolsVersion = "34.0.0"
+}
+
+dependencies {
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
 }
