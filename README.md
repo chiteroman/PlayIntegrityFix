@@ -32,7 +32,7 @@ adb shell "logcat | grep 'PIF'"
 ```
 
 ## Can this module pass MEETS_STRONG_INTEGRITY?
-**No**
+No
 
 ## SafetyNet is obsolete
 You can read more info here: [click me](https://xdaforums.com/t/info-play-integrity-api-replacement-for-safetynet.4479337/)
@@ -43,6 +43,6 @@ Their devs are already working in it: [click me](https://xiaomi.eu/community/thr
 If Xiaomi.eu devs drop support for your device and this module doesn't work you must change the ROM if you want to pass DEVICE verdict.
 
 ## Thanks to
-- @topjohnwu -> [libcxx](https://github.com/topjohnwu/libcxx)
-- @jmpews -> [Dobby](https://github.com/jmpews/Dobby)
-- @LSPosed -> [AndroidHiddenApiBypass](https://github.com/LSPosed/AndroidHiddenApiBypass)
+- [libcxx](https://github.com/topjohnwu/libcxx)
+- [Shadowhook](https://github.com/bytedance/android-inline-hook)
+- [Dobby](https://github.com/jmpews/Dobby)

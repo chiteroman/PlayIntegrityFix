@@ -4,8 +4,19 @@
 #include <sys/system_properties.h>
 
 #include "zygisk.hpp"
+#include "classes_dex.h"
+
+#if defined(__arm__) || defined(__aarch64__)
+
+#include "shadowhook.h"
+
+#endif
+
+#if defined(__i386__) || defined(__x86_64__)
+
 #include "dobby.h"
-#include "classes_hex.h"
+
+#endif
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
@@ -13,12 +24,9 @@ static void (*o_callback)(void *, const char *, const char *, uint32_t);
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (o_callback == nullptr) return;
+    if (cookie != nullptr && name != nullptr) {
 
-    if (cookie != nullptr && name != nullptr && value != nullptr) {
-
-        if (strcmp(name, "ro.product.first_api_level") == 0) value = "25";
-        else if (strcmp(name, "ro.build.version.security_patch") == 0) value = "2018-01-05";
+        if (strstr(name, "api_level") != nullptr) value = "25";
 
         if (strncmp(name, "cache", 5) != 0) LOGD("[%s] -> %s", name, value);
     }
@@ -45,17 +53,36 @@ static void my_system_property_read_callback(const prop_info *pi,
 
 static void doHook() {
     LOGD("Starting to hook...");
-    auto handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+    void *handle;
+
+#if defined(__arm__) || defined(__aarch64__)
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+    handle = shadowhook_hook_sym_name(
+            "libc.so",
+            "__system_property_read_callback",
+            reinterpret_cast<void *>(my_system_property_read_callback),
+            reinterpret_cast<void **>(&o_system_property_read_callback)
+    );
+#endif
+
+#if defined(__i386__) || defined(__x86_64__)
+    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+#endif
 
     if (handle == nullptr) {
         LOGD("Couldn't get __system_property_read_callback handle.");
         return;
     }
 
-    LOGD("Got __system_property_read_callback handle and hooked it at %p", handle);
+#if defined(__i386__) || defined(__x86_64__)
+        DobbyHook(
+                handle,
+                reinterpret_cast<void *>(my_system_property_read_callback),
+                reinterpret_cast<void **>(&o_system_property_read_callback)
+        );
+#endif
 
-    DobbyHook(handle, (void *) my_system_property_read_callback,
-              (void **) &o_system_property_read_callback);
+    LOGD("Got __system_property_read_callback handle and hooked it at %p", handle);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
