@@ -34,7 +34,7 @@ adb shell "logcat | grep 'PIF'"
 ## Can this module pass MEETS_STRONG_INTEGRITY?
 **No**
 
-## SafetyNet is depracated
+## SafetyNet is obsolete
 You can read more info here: [click me](https://xdaforums.com/t/info-play-integrity-api-replacement-for-safetynet.4479337/)
 
 ## Current Issues
