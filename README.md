@@ -41,3 +41,8 @@ You can read more info here: [click me](https://xdaforums.com/t/info-play-integr
 It doesn't work in Xiaomi.eu custom ROMs due their fix implementation.
 Their devs are already working in it: [click me](https://xiaomi.eu/community/threads/google-wallet-stopped-working-device-doesnt-meet-security-requirements.70444/post-704331).
 If Xiaomi.eu devs drop support for your device and this module doesn't work you must change the ROM if you want to pass DEVICE verdict.
+
+## Thanks to
+- @topjohnwu -> [libcxx](https://github.com/topjohnwu/libcxx)
+- @jmpews -> [Dobby](https://github.com/jmpews/Dobby)
+- @LSPosed -> [AndroidHiddenApiBypass](https://github.com/LSPosed/AndroidHiddenApiBypass)
