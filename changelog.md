@@ -6,3 +6,5 @@
 - Using Shadowhook for arm64 and arm (smartphones), using Dobby for x86, x86_64 (emulators)
 
 This should be the final build until Google "unfix" (again) the module. If you want to report a crash report or any other issue, please, always provide logs.
+
+Check README.md to know how to certify Play Store and fix Google Wallet.

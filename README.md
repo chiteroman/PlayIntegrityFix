@@ -25,6 +25,15 @@ If you are failing basicIntegrity (SafetyNet) or MEETS_BASIC_INTEGRITY (Play Int
 
 Some modules which modify system can trigger DroidGuard detection, never hook GMS processes.
 
+## Certify Play Store and fix Google Wallet
+Follow this steps:
+- Clear Google Wallet data and cache.
+- Clear Google Play Store data and cache.
+- Clear GSF (com.google.android.gsf) data and cache.
+- Flash my module in Magisk/KernelSU (if you already have my module, just ignore this step)
+
+Then reboot device and should work. Also some users recommend to clear GMS data and cache but for me it wasn't necessary.
+
 ## Read module logs
 You can read module logs using this command:
 ```
