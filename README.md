@@ -52,6 +52,5 @@ Their devs are already working on it: [click me](https://xiaomi.eu/community/thr
 If Xiaomi.eu devs drop support for your device and this module doesn't work you must change the ROM if you want to pass DEVICE verdict.
 
 ## Thanks to
-- [libcxx](https://github.com/topjohnwu/libcxx)
-- [Shadowhook](https://github.com/bytedance/android-inline-hook)
+- [libcxx-prefab](https://github.com/RikkaW/libcxx-prefab)
 - [Dobby](https://github.com/jmpews/Dobby)
