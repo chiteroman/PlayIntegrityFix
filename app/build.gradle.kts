@@ -11,6 +11,9 @@ android {
             excludes += "**/libdobby.so"
         }
     }
+    buildFeatures {
+        prefab = true
+    }
 
     defaultConfig {
         applicationId = "es.chiteroman.playintegrityfix"
@@ -61,4 +64,8 @@ android {
 
     ndkVersion = "26.1.10909125"
     buildToolsVersion = "34.0.0"
+}
+
+dependencies {
+    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
