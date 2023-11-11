@@ -62,13 +62,17 @@ public class EntryPoint {
 
     private static void setProp(String name, String value) {
         try {
-            String oldValue;
             Field field = Build.class.getDeclaredField(name);
+
             field.setAccessible(true);
-            oldValue = (String) field.get(null);
-            field.set(null, value);
+            String oldValue = (String) field.get(null);
+
+            if (!value.equals(oldValue)) {
+                field.set(null, value);
+                LOG(String.format("Field '%s' value is now '%s'", name, value));
+            }
+
             field.setAccessible(false);
-            LOG(String.format("[%s] -> [%s] is now: [%s]", name, oldValue, value));
         } catch (NoSuchFieldException e) {
             LOG(String.format("Couldn't find '%s' field name.", name));
         } catch (IllegalAccessException e) {
