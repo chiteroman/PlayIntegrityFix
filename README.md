@@ -15,7 +15,7 @@ To use this module you must have one of this:
 
 ## About module
 It injects a classes.dex file to modify few fields in android.os.Build class. Also, in native code it creates a hook to modify system properties.
-The purpouse of the module is to avoid a hardware attestation.
+The purpose of the module is to avoid a hardware attestation.
 
 ## Failing BASIC verdict
 If you are failing basicIntegrity (SafetyNet) or MEETS_BASIC_INTEGRITY (Play Integrity) something is wrong in your setup. My recommended steps in order to find the problem:
@@ -48,7 +48,7 @@ You can read more info here: [click me](https://xdaforums.com/t/info-play-integr
 
 ## Current Issues
 It doesn't work in Xiaomi.eu custom ROMs due their fix implementation.
-Their devs are already working in it: [click me](https://xiaomi.eu/community/threads/google-wallet-stopped-working-device-doesnt-meet-security-requirements.70444/post-704331).
+Their devs are already working on it: [click me](https://xiaomi.eu/community/threads/google-wallet-stopped-working-device-doesnt-meet-security-requirements.70444/post-704331).
 If Xiaomi.eu devs drop support for your device and this module doesn't work you must change the ROM if you want to pass DEVICE verdict.
 
 ## Thanks to
