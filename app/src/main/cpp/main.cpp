@@ -89,9 +89,9 @@ public:
                 char buffer[size];
                 read(fd, buffer, size);
 
-                moduleDex.insert(moduleDex.end(), buffer, buffer + size);
-
                 close(fd);
+
+                moduleDex.insert(moduleDex.end(), buffer, buffer + size);
 
                 return;
             }
