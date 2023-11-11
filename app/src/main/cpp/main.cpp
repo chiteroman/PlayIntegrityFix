@@ -157,7 +157,6 @@ private:
         env->DeleteLocalRef(dexCl);
         env->DeleteLocalRef(entryClassName);
         env->DeleteLocalRef(entryClassObj);
-        env->DeleteLocalRef(entryClass);
     }
 };
 
