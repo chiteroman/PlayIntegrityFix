@@ -5,18 +5,7 @@
 
 #include "zygisk.hpp"
 #include "classes_dex.h"
-
-#if defined(__arm__) || defined(__aarch64__)
-
-#include "shadowhook.h"
-
-#endif
-
-#if defined(__i386__) || defined(__x86_64__)
-
 #include "dobby.h"
-
-#endif
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
@@ -24,7 +13,7 @@ static void (*o_callback)(void *, const char *, const char *, uint32_t);
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie != nullptr && name != nullptr) {
+    if (name != nullptr) {
 
         if (strstr(name, "api_level") != nullptr) value = "25";
 
@@ -53,34 +42,18 @@ static void my_system_property_read_callback(const prop_info *pi,
 
 static void doHook() {
     LOGD("Starting to hook...");
-    void *handle;
-
-#if defined(__arm__) || defined(__aarch64__)
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
-    handle = shadowhook_hook_sym_name(
-            "libc.so",
-            "__system_property_read_callback",
-            reinterpret_cast<void *>(my_system_property_read_callback),
-            reinterpret_cast<void **>(&o_system_property_read_callback)
-    );
-#endif
-
-#if defined(__i386__) || defined(__x86_64__)
-    handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
-#endif
+    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
 
     if (handle == nullptr) {
         LOGD("Couldn't get __system_property_read_callback handle.");
         return;
     }
 
-#if defined(__i386__) || defined(__x86_64__)
-        DobbyHook(
-                handle,
-                reinterpret_cast<void *>(my_system_property_read_callback),
-                reinterpret_cast<void **>(&o_system_property_read_callback)
-        );
-#endif
+    DobbyHook(
+            handle,
+            reinterpret_cast<void *>(my_system_property_read_callback),
+            reinterpret_cast<void **>(&o_system_property_read_callback)
+    );
 
     LOGD("Got __system_property_read_callback handle and hooked it at %p", handle);
 }
@@ -148,15 +121,6 @@ private:
         auto entryClass = (jclass) entryClassObj;
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
-
-        LOGD("clean");
-        env->DeleteLocalRef(clClass);
-        env->DeleteLocalRef(systemClassLoader);
-        env->DeleteLocalRef(buf);
-        env->DeleteLocalRef(dexClClass);
-        env->DeleteLocalRef(dexCl);
-        env->DeleteLocalRef(entryClassName);
-        env->DeleteLocalRef(entryClassObj);
     }
 };
 
