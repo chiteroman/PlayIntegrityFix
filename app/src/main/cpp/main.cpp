@@ -1,42 +1,43 @@
 #include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 #include <android/log.h>
 #include <sys/system_properties.h>
-#include <string_view>
-#include <map>
-#include <vector>
 
 #include "zygisk.hpp"
 #include "dobby.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
+#define FIRST_API_LEVEL "25"
 
-static std::map<void *, T_Callback> map;
+static void (*o_callback)(void *, const char *, const char *, uint32_t);
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || !map.contains(cookie)) return;
+    if (o_callback == nullptr || cookie == nullptr || name == nullptr || value == nullptr) return;
 
-    std::string_view prop(name);
+    if (strcmp(name, "ro.product.first_api_level") == 0) {
+        LOGD("[%s] Original: %s | Mod: %s", name, value, FIRST_API_LEVEL);
+        return o_callback(cookie, name, FIRST_API_LEVEL, serial);
+    }
 
-    if (prop.ends_with("api_level")) value = "25";
-
-    if (!prop.starts_with("cache")) LOGD("[%s] -> %s", name, value);
-
-    return map[cookie](cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
-static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
+static void (*o_system_property_read_callback)(const prop_info *,
+                                               void (*)(void *, const char *, const char *,
+                                                        uint32_t), void *);
 
 static void
-my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
+my_system_property_read_callback(const prop_info *pi,
+                                 void (*callback)(void *cookie, const char *name, const char *value,
+                                                  uint32_t serial), void *cookie) {
 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    map[cookie] = callback;
+    o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -58,6 +59,12 @@ static void doHook() {
     LOGD("Got __system_property_read_callback handle and hooked it at %p", handle);
 }
 
+static bool dontInject() {
+    char host[PROP_VALUE_MAX];
+    if (__system_property_get("ro.build.host", host) < 1) return false;
+    return strcmp(host, "xiaomi.eu") == 0 || strcmp(host, "EliteDevelopment") == 0;
+}
+
 class PlayIntegrityFix : public zygisk::ModuleBase {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
@@ -66,18 +73,20 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+        bool isGms = false;
 
-        std::string_view process(rawProcess);
+        auto process = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        bool isGms = process.starts_with("com.google.android.gms");
-        bool isGmsUnstable = process.compare("com.google.android.gms.unstable") == 0;
+        if (process != nullptr) {
+            isGms = strncmp(process, "com.google.android.gms", 22) == 0;
+            isGmsUnstable = strcmp(process, "com.google.android.gms.unstable") == 0;
+        }
 
-        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
+        env->ReleaseStringUTFChars(args->nice_name, process);
 
         if (isGms) api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (isGmsUnstable) {
+        if (isGmsUnstable && !dontInject()) {
 
             int fd = api->connectCompanion();
 
@@ -86,12 +95,11 @@ public:
 
             if (size > 0) {
 
-                char buffer[size];
-                read(fd, buffer, size);
+                moduleDex = static_cast<char *>(malloc(size));
+
+                read(fd, moduleDex, size);
 
                 close(fd);
-
-                moduleDex.insert(moduleDex.end(), buffer, buffer + size);
 
                 return;
             }
@@ -103,9 +111,12 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (moduleDex.empty()) return;
+        if (!isGmsUnstable) return;
 
         doHook();
+
+        if (moduleDex == nullptr) return;
+
         injectDex();
     }
 
@@ -116,7 +127,8 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<char> moduleDex;
+    bool isGmsUnstable = false;
+    char *moduleDex = nullptr;
 
     void injectDex() {
         LOGD("get system classloader");
@@ -126,7 +138,7 @@ private:
         auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
         LOGD("create buffer");
-        auto buf = env->NewDirectByteBuffer(moduleDex.data(), static_cast<jlong>(moduleDex.size()));
+        auto buf = env->NewDirectByteBuffer(moduleDex, sizeof(moduleDex));
         LOGD("create class loader");
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
@@ -143,6 +155,9 @@ private:
         auto entryClass = (jclass) entryClassObj;
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
+
+        LOGD("clean");
+        free(moduleDex);
     }
 };
 

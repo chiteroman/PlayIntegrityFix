@@ -21,14 +21,13 @@ The purpose of the module is to avoid a hardware attestation.
 If you are failing basicIntegrity (SafetyNet) or MEETS_BASIC_INTEGRITY (Play Integrity) something is wrong in your setup. My recommended steps in order to find the problem:
 - Disable all modules except mine.
 - Check your SELinux (must be enforced).
-- If you are using Shamiko and have deny list disabled, you must manually add GMS main and unstable processes to hide list or DroidGuard will detect root.
 
 Some modules which modify system can trigger DroidGuard detection, never hook GMS processes.
 
 ## Certify Play Store and fix Google Wallet
 Follow this steps:
-- Clear Google Wallet data and cache.
-- Clear Google Play Store data and cache.
+- Clear Google Wallet cache.
+- Clear Google Play Store cache.
 - Clear GSF (com.google.android.gsf) data and cache.
 - Flash my module in Magisk/KernelSU (if you already have my module, just ignore this step)
 
