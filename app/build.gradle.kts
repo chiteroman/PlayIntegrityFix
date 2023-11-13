@@ -5,15 +5,13 @@ plugins {
 android {
     namespace = "es.chiteroman.playintegrityfix"
     compileSdk = 34
+    ndkVersion = "26.1.10909125"
+    buildToolsVersion = "34.0.0"
 
     packaging {
         jniLibs {
             excludes += "**/libdobby.so"
         }
-    }
-
-    buildFeatures {
-        prefab = true
     }
 
     defaultConfig {
@@ -26,9 +24,11 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
 
-                cppFlags += "-std=c++20"
+                cFlags += "-fvisibility=hidden"
+                cFlags += "-fvisibility-inlines-hidden"
+
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
@@ -53,13 +53,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
-
-    ndkVersion = "26.1.10909125"
-    buildToolsVersion = "34.0.0"
-}
-
-dependencies {
-    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
