@@ -45,6 +45,11 @@ my_system_property_read_callback(const prop_info *pi,
 
 static void doHook() {
     void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    if (handle == nullptr) {
+        LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
+        return;
+    }
+    LOGD("Found '__system_property_read_callback' handle at %p", handle);
     DobbyHook(handle, (void *) my_system_property_read_callback,
               (void **) &o_system_property_read_callback);
 }
@@ -92,17 +97,16 @@ public:
         long size = 0;
         read(fd, &size, sizeof(size));
 
-        if (size > 0) {
-
-            char buffer[size];
-            read(fd, buffer, size);
-
+        if (size < 1) {
             close(fd);
-
-            moduleDex.insert(moduleDex.end(), buffer, buffer + size);
-
+            LOGD("Couldn't load classes.dex, does the file exist?");
             return;
         }
+
+        char buffer[size];
+        read(fd, buffer, size);
+
+        moduleDex.insert(moduleDex.end(), buffer, buffer + size);
 
         close(fd);
     }
