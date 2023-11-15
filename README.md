@@ -51,11 +51,11 @@ Their devs are already working on it: [click me](https://xiaomi.eu/community/thr
 If Xiaomi.eu devs drop support for your device and this module doesn't work you must change the ROM if you want to pass DEVICE verdict.
 
 ## Make FCM Push back to work after cleared GSF data
-Once your cleared GSF (Google Service Framework, com.google.android.gsf), a new DeviceID of Google Service Framework will be generated. So all the FCM tokens that have registered in the server of Apps will no longer work (it will point to your old DeviceID). You can follow these steps to make the Apps to generate a new FCM token. 
+Once you cleared GSF (Google Service Framework, com.google.android.gsf) data, a new DeviceID of Google Service Framework will be generated. So all the FCM tokens that have registered in the server of Apps will no longer work (it will point to your old DeviceID). You can follow these steps to make the Apps to generate a new FCM token. 
 
 The idea is to delete a file called `xxx.gms.appid-no-backup` (xxx usually is the package name) in the app's files folder. Once the file does not exist, the app will generate a new FCM token when it starts up next time.
 
-Run the following commands to do that, you can use `adb shell`, Termux, some terminal apps, whatever.
+Run the following commands to do that, you can use `adb shell`, Termux, some terminal apps, or whatever.
 
 1. Get the root user
 ```
@@ -67,7 +67,7 @@ su
 cd /data/data
 ```
 
-3. Search for the files end with `gms.appid-no-backup` firstly (without really delete it), so you can review the list of the files will be deleted, make sure it will not delete something wrong (usually it should not. I don't think any other useful files named like this). If you don't really care, you can skip this step.
+3. Search for the files ending with `gms.appid-no-backup` firstly (without really deleting it), so you can review the list of the files that will be deleted, and make sure it will not delete something wrong (usually it should not. I don't think any other useful files named like this). If you don't really care, you can skip this step.
 ```
 find . -type f -name '*gms.appid-no-backup'
 ```
@@ -79,7 +79,7 @@ find . -type f -name '*gms.appid-no-backup' -delete
 
 5. Reboot your device.
 
-6. It is better to launch the apps that receive FCM push one time, to make sure it generate a new FCM token and register with the server.
+6. It is better to launch the apps that receive FCM push one time, to make sure it generates a new FCM token and registers with the server.
 
 ## Thanks to
 - [Dobby](https://github.com/jmpews/Dobby)
