@@ -50,5 +50,36 @@ It doesn't work in Xiaomi.eu custom ROMs due their fix implementation.
 Their devs are already working on it: [click me](https://xiaomi.eu/community/threads/google-wallet-stopped-working-device-doesnt-meet-security-requirements.70444/post-704331).
 If Xiaomi.eu devs drop support for your device and this module doesn't work you must change the ROM if you want to pass DEVICE verdict.
 
+## Make FCM Push back to work after cleared GSF data
+Once your cleared GSF (Google Service Framework, com.google.android.gsf), a new DeviceID of Google Service Framework will be generated. So all the FCM tokens that have registered in the server of Apps will no longer work (it will point to your old DeviceID). You can follow these steps to make the Apps to generate a new FCM token. 
+
+The idea is to delete a file called `xxx.gms.appid-no-backup` (xxx usually is the package name) in the app's files folder. Once the file does not exist, the app will generate a new FCM token when it starts up next time.
+
+Run the following commands to do that, you can use `adb shell`, Termux, some terminal apps, whatever.
+
+1. Get the root user
+```
+su
+```
+
+2. cd to `/data/data`
+```
+cd /data/data
+```
+
+3. Search for the files end with `gms.appid-no-backup` firstly (without really delete it), so you can review the list of the files will be deleted, make sure it will not delete something wrong (usually it should not. I don't think any other useful files named like this). If you don't really care, you can skip this step.
+```
+find . -type f -name '*gms.appid-no-backup'
+```
+
+4. Delete all the files end with `gms.appid-no-backup`
+```
+find . -type f -name '*gms.appid-no-backup' -delete
+```
+
+5. Reboot your device.
+
+6. It is better to launch the apps that receive FCM push one time, to make sure it generate a new FCM token and register with the server.
+
 ## Thanks to
 - [Dobby](https://github.com/jmpews/Dobby)
