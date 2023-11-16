@@ -1,8 +1,5 @@
-# v12.3
+# v13
 
-Fixed crashing issues in recent launched devices.
+Device verdict is green again x2.
 
-This should be the final build until Google "unfix" (again) the module.
-If you want to report a crash report or any other issue, please, always provide logs.
-
-Check README.md to know how to certify Play Store and fix Google Wallet.
+If you are using xiaomi.eu expect to fail all tests.

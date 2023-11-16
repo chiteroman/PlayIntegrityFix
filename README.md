@@ -1,5 +1,3 @@
-# GOOGLE BANNED AGAIN THE FINGERPRINT, I'M UPDATING THE MODULE. Be patient, I hope I can fix it.
-
 # Play Integrity Fix
 A Zygisk module which fix "ctsProfileMatch" (SafetyNet) and "MEETS_DEVICE_INTEGRITY" (Play Integrity).
 
@@ -42,15 +40,10 @@ adb shell "logcat | grep 'PIF'"
 ```
 
 ## Can this module pass MEETS_STRONG_INTEGRITY?
-No
+NO
 
-## SafetyNet is obsolete
+## Play Integrity is now our problem, SafetyNet is deprecated
 You can read more info here: [click me](https://xdaforums.com/t/info-play-integrity-api-replacement-for-safetynet.4479337/)
-
-## Current Issues
-It doesn't work in Xiaomi.eu custom ROMs due their fix implementation.
-Their devs are already working on it: [click me](https://xiaomi.eu/community/threads/google-wallet-stopped-working-device-doesnt-meet-security-requirements.70444/post-704331).
-If Xiaomi.eu devs drop support for your device and this module doesn't work you must change the ROM if you want to pass DEVICE verdict.
 
 ## Make FCM Push back to work after cleared GSF data
 Once you cleared GSF (Google Service Framework, com.google.android.gsf) data, a new DeviceID of Google Service Framework will be generated. So all the FCM tokens that have registered in the server of Apps will no longer work (it will point to your old DeviceID). You can follow these steps to make the Apps to generate a new FCM token. 
@@ -82,6 +75,3 @@ find . -type f -name '*gms.appid-no-backup' -delete
 5. Reboot your device.
 
 6. It is better to launch the apps that receive FCM push one time, to make sure it generates a new FCM token and registers with the server.
-
-## Thanks to
-- [Dobby](https://github.com/jmpews/Dobby)
