@@ -26,12 +26,13 @@ Some modules which modify system can trigger DroidGuard detection, never hook GM
 
 ## Certify Play Store and fix Google Wallet
 Follow this steps:
+- Flash my module in Magisk/KernelSU (if you already have my module, just ignore this step).
 - Clear Google Wallet cache.
 - Clear Google Play Store cache.
-- Clear GSF (com.google.android.gsf) data and cache.
-- Flash my module in Magisk/KernelSU (if you already have my module, just ignore this step)
+- Clear GSF (com.google.android.gsf) cache.
+- Clear GMS cache.
 
-Then reboot device and should work. Also some users recommend to clear GMS data and cache but for me it wasn't necessary.
+Reboot and done!
 
 ## Read module logs
 You can read module logs using this command:
@@ -40,7 +41,7 @@ adb shell "logcat | grep 'PIF'"
 ```
 
 ## Can this module pass MEETS_STRONG_INTEGRITY?
-NO
+**No**
 
 ## Play Integrity is now our problem, SafetyNet is deprecated
 You can read more info here: [click me](https://xdaforums.com/t/info-play-integrity-api-replacement-for-safetynet.4479337/)
