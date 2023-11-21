@@ -1,0 +1,16 @@
+# RootBeer, Microsoft
+ro.build.tags=release-keys
+
+# Samsung
+ro.boot.warranty_bit=0
+ro.vendor.boot.warranty_bit=0
+ro.vendor.warranty_bit=0
+ro.warranty_bit=0
+
+# OnePlus
+ro.is_ever_orange=0
+
+# Other
+ro.build.type=user
+ro.debuggable=0
+ro.secure=1

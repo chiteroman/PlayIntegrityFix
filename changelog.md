@@ -1,11 +1,10 @@
-# v13.1
+# v13.2
 
-For normal users:
-- Custom props! You can edit them in file 'pif.prop'
+- Added SECURITY_PATCH field.
+- Ignore null and empty fields.
 
-For devs:
-- Source code published again.
-- Drop support for emulators (x86 and x86_64).
-- Use ShadowHook instead Dobby.
-- Updated libcxx.
-- 'classes.dex' is back to module folder instead hardcoding it in libs.
+We have a Telegram channel!
+If you want to share your knowledge join:
+https://t.me/playintegrityfix
+
+Also, if Google blacklist the fingerprint (again), you can post your custom pif.prop and I will update the module.

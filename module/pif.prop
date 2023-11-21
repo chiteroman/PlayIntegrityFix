@@ -1,0 +1,7 @@
+PRODUCT=bullhead
+DEVICE=bullhead
+MANUFACTURER=Google
+BRAND=Google
+MODEL=Nexus 5X
+FINGERPRINT=google/bullhead/bullhead:8.0.0/OPR6.170623.013/4283548:user/release-keys
+SECURITY_PATCH=2018-01-01
