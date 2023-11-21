@@ -50,7 +50,7 @@ Follow this steps:
 - Flash my module in Magisk/KernelSU (if you already have my module, just ignore this step).
 - Clear Google Wallet cache (if you have it).
 - Clear Google Play Store cache and data.
-- Clear GMS (com.google.android.gms) cache and data (or just reboot without delete and waiting some time and it's done).
+- Clear GMS (com.google.android.gms) cache and data (or just reboot without clear and waiting some time and it's done).
 
 Reboot and done!
 
