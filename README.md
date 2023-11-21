@@ -48,10 +48,9 @@ Some modules which modify system can trigger DroidGuard detection, never hook GM
 Follow this steps:
 
 - Flash my module in Magisk/KernelSU (if you already have my module, just ignore this step).
-- Clear Google Wallet cache.
-- Clear Google Play Store cache.
-- Clear GSF (com.google.android.gsf) cache.
-- Clear GMS cache.
+- Clear Google Wallet cache (if you have it).
+- Clear Google Play Store cache and data.
+- Clear GMS (com.google.android.gms) cache and data.
 
 Reboot and done!
 
