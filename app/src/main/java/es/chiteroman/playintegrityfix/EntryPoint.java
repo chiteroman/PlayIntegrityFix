@@ -60,12 +60,36 @@ public final class EntryPoint {
     }
 
     public static void spoofDevice() {
-        props.forEach((field, value) -> setProp((String) field, (String) value));
+        setProp("PRODUCT", props.getProperty("PRODUCT"));
+        setProp("DEVICE", props.getProperty("DEVICE"));
+        setProp("MANUFACTURER", props.getProperty("MANUFACTURER"));
+        setProp("BRAND", props.getProperty("BRAND"));
+        setProp("MODEL", props.getProperty("MODEL"));
+        setProp("FINGERPRINT", props.getProperty("FINGERPRINT"));
+        setVersionProp("SECURITY_PATCH", props.getProperty("SECURITY_PATCH"));
     }
 
     private static void setProp(String name, String value) {
+        if (name == null || value == null || name.isEmpty() || value.isEmpty()) return;
         try {
             Field field = Build.class.getDeclaredField(name);
+            field.setAccessible(true);
+            String oldValue = (String) field.get(null);
+            field.set(null, value);
+            field.setAccessible(false);
+            if (value.equals(oldValue)) return;
+            LOG(String.format("[%s]: %s -> %s", name, oldValue, value));
+        } catch (NoSuchFieldException e) {
+            LOG(String.format("Couldn't find '%s' field name.", name));
+        } catch (IllegalAccessException e) {
+            LOG(String.format("Couldn't modify '%s' field value.", name));
+        }
+    }
+
+    private static void setVersionProp(String name, String value) {
+        if (name == null || value == null || name.isEmpty() || value.isEmpty()) return;
+        try {
+            Field field = Build.VERSION.class.getDeclaredField(name);
             field.setAccessible(true);
             String oldValue = (String) field.get(null);
             field.set(null, value);

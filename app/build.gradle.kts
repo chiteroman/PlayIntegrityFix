@@ -19,7 +19,7 @@ android {
             ndk {
                 //noinspection ChromeOsAbiSupport
                 abiFilters += setOf("armeabi-v7a", "arm64-v8a")
-                jobs = 4
+                jobs = Runtime.getRuntime().availableProcessors()
             }
         }
     }
