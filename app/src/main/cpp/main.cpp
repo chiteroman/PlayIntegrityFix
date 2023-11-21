@@ -4,17 +4,21 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <fstream>
 
 #include "zygisk.hpp"
-#include "shadowhook.h"
+#include "dobby.h"
+#include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-#define FIRST_API_LEVEL "32"
+static std::string API_LEVEL;
+
+static std::string SECURITY_PATCH;
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.prop"
+#define JSON_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -26,12 +30,10 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     std::string_view prop(name);
 
-    if (prop.compare("ro.product.first_api_level") == 0) {
-        LOGD("Property '%s' with value '%s' is now spoofed to '%s'", name, value, FIRST_API_LEVEL);
-        value = FIRST_API_LEVEL;
-    }
+    if (prop.ends_with("api_level")) value = API_LEVEL.c_str();
+    else if (prop.ends_with("security_patch")) value = SECURITY_PATCH.c_str();
 
-    if (!prop.starts_with("cache")) LOGD("[%s] -> %s", name, value);
+    if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s] -> %s", name, value);
 
     return propCallback(cookie, name, value, serial);
 }
@@ -49,25 +51,27 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
 }
 
 static void doHook() {
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
-    void *handle = shadowhook_hook_sym_name(
-            "libc.so",
-            "__system_property_read_callback",
-            reinterpret_cast<void *>(my_system_property_read_callback),
-            reinterpret_cast<void **>(&o_system_property_read_callback)
-    );
+    std::ifstream ifs("/data/data/com.google.android.gms/pif.json");
+
+    auto json = nlohmann::json::parse(ifs, nullptr, false);
+
+    ifs.close();
+
+    LOGD("Loaded %d keys from pif.json", static_cast<int>(json.size()));
+
+    API_LEVEL = json["API_LEVEL"].get<std::string>();
+    SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+
+    json.clear();
+
+    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
-}
-
-static bool needHook() {
-    char rawApi[2];
-    if (__system_property_get("ro.product.first_api_level", rawApi) < 1) return true;
-    int api = std::stoi(rawApi);
-    return api > 32;
+    DobbyHook(handle, (void *) my_system_property_read_callback,
+              (void **) &o_system_property_read_callback);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -91,18 +95,16 @@ public:
 
         if (isGmsUnstable) {
 
+            int fd = api->connectCompanion();
+
             auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
             std::string dir(rawDir);
             env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
 
-            LOGD("GMS data dir: %s", dir.c_str());
-
-            int fd = api->connectCompanion();
-
             int strSize = static_cast<int>(dir.size());
 
             write(fd, &strSize, sizeof(strSize));
-            write(fd, dir.data(), dir.size());
+            write(fd, dir.data(), strSize);
 
             dir.clear();
             dir.shrink_to_fit();
@@ -110,14 +112,14 @@ public:
             long size;
             read(fd, &size, sizeof(size));
 
-            moduleDex.resize(size);
-            read(fd, moduleDex.data(), size);
+            char buffer[size];
+            read(fd, buffer, size);
 
             close(fd);
 
-            hook = needHook();
+            moduleDex.insert(moduleDex.end(), buffer, buffer + size);
 
-            if (hook) return;
+            return;
         }
 
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
@@ -125,7 +127,9 @@ public:
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (!isGmsUnstable) return;
-        if (hook) doHook();
+
+        doHook();
+
         if (!moduleDex.empty()) injectDex();
     }
 
@@ -137,10 +141,11 @@ private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
     bool isGmsUnstable = false;
-    bool hook = false;
     std::vector<char> moduleDex;
 
     void injectDex() {
+        LOGD("Preparing to inject %d bytes to the process", static_cast<int>(moduleDex.size()));
+
         LOGD("get system classloader");
         auto clClass = env->FindClass("java/lang/ClassLoader");
         auto getSystemClassLoader = env->GetStaticMethodID(clClass, "getSystemClassLoader",
@@ -166,7 +171,9 @@ private:
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
 
-        LOGD("Injected %d bytes to the process", static_cast<int>(moduleDex.size()));
+        LOGD("clean");
+        moduleDex.clear();
+        moduleDex.shrink_to_fit();
     }
 };
 
@@ -174,33 +181,28 @@ static void companion(int fd) {
     int strSize;
     read(fd, &strSize, sizeof(strSize));
 
-    std::string propFile;
+    std::string file;
 
-    propFile.resize(strSize);
+    file.resize(strSize);
+    read(fd, file.data(), strSize);
 
-    read(fd, propFile.data(), strSize);
+    file = file + "/pif.json";
 
-    propFile = propFile + "/cache/pif.prop";
+    LOGD("Json path: %s", file.c_str());
 
-    std::filesystem::copy_file(PROP_FILE_PATH, propFile,
+    std::filesystem::copy_file(JSON_FILE_PATH, file,
                                std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::permissions(file, std::filesystem::perms::all);
 
-    std::filesystem::permissions(propFile, std::filesystem::perms::owner_read |
-                                           std::filesystem::perms::group_read |
-                                           std::filesystem::perms::others_read);
+    std::ifstream dex(DEX_FILE_PATH, std::ifstream::binary | std::ifstream::ate);
 
-    propFile.clear();
-    propFile.shrink_to_fit();
-
-    FILE *file = fopen(DEX_FILE_PATH, "rb");
-
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    long size = dex.tellg();
+    dex.seekg(std::ifstream::beg);
 
     char buffer[size];
-    fread(buffer, 1, size, file);
-    fclose(file);
+    dex.read(buffer, size);
+
+    dex.close();
 
     write(fd, &size, sizeof(size));
     write(fd, buffer, size);

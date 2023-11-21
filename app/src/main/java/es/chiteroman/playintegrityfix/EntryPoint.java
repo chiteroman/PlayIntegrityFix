@@ -1,10 +1,11 @@
 package es.chiteroman.playintegrityfix;
 
 import android.os.Build;
+import android.util.JsonReader;
 import android.util.Log;
 
 import java.io.File;
-import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.security.KeyStore;
@@ -12,21 +13,31 @@ import java.security.KeyStoreException;
 import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
-import java.util.Properties;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class EntryPoint {
-    private static final Properties props = new Properties();
-    private static final File file = new File("/data/data/com.google.android.gms/cache/pif.prop");
+    private static final Map<String, String> map = new HashMap<>();
+    private static final File file = new File("/data/data/com.google.android.gms/pif.json");
 
     public static void init() {
 
-        try (FileInputStream inputStream = new FileInputStream(file)) {
-            props.load(inputStream);
-            LOG("Loaded " + props.size() + " properties!");
+        try (JsonReader reader = new JsonReader(new FileReader(file))) {
+            reader.beginObject();
+
+            while (reader.hasNext()) {
+                String field = reader.nextName();
+                String value = reader.nextString();
+                map.put(field, value);
+            }
+
+            reader.endObject();
         } catch (IOException e) {
-            LOG("Couldn't load properties file: " + e);
+            LOG("Couldn't load pif.json: " + e);
             return;
         }
+
+        LOG("Loaded " + map.size() + " fields!");
 
         spoofDevice();
         spoofProvider();
@@ -60,13 +71,13 @@ public final class EntryPoint {
     }
 
     public static void spoofDevice() {
-        setProp("PRODUCT", props.getProperty("PRODUCT"));
-        setProp("DEVICE", props.getProperty("DEVICE"));
-        setProp("MANUFACTURER", props.getProperty("MANUFACTURER"));
-        setProp("BRAND", props.getProperty("BRAND"));
-        setProp("MODEL", props.getProperty("MODEL"));
-        setProp("FINGERPRINT", props.getProperty("FINGERPRINT"));
-        setVersionProp("SECURITY_PATCH", props.getProperty("SECURITY_PATCH"));
+        setProp("PRODUCT", map.get("PRODUCT"));
+        setProp("DEVICE", map.get("DEVICE"));
+        setProp("MANUFACTURER", map.get("MANUFACTURER"));
+        setProp("BRAND", map.get("BRAND"));
+        setProp("MODEL", map.get("MODEL"));
+        setProp("FINGERPRINT", map.get("FINGERPRINT"));
+        setVersionProp("SECURITY_PATCH", map.get("SECURITY_PATCH"));
     }
 
     private static void setProp(String name, String value) {

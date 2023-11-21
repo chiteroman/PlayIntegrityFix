@@ -15,11 +15,20 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        packaging {
+            jniLibs {
+                excludes += "**/libdobby.so"
+            }
+        }
+
+        buildFeatures {
+            prefab = true
+        }
+
         externalNativeBuild {
-            ndk {
-                //noinspection ChromeOsAbiSupport
-                abiFilters += setOf("armeabi-v7a", "arm64-v8a")
-                jobs = Runtime.getRuntime().availableProcessors()
+            cmake {
+                arguments += setOf("-DANDROID_STL=none", "-DCMAKE_BUILD_TYPE=MinSizeRel")
+                cppFlags += setOf("-std=c++20", "-fno-exceptions", "-fno-rtti", "-fvisibility=hidden", "-fvisibility-inlines-hidden")
             }
         }
     }
@@ -38,8 +47,13 @@ android {
     }
 
     externalNativeBuild {
-        ndkBuild {
-            path = file("src/main/cpp/Android.mk")
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
+}
+
+dependencies {
+    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
