@@ -3,12 +3,11 @@
 #include <unistd.h>
 #include <string>
 #include <vector>
+#include <map>
 #include <filesystem>
-#include <fstream>
 
 #include "zygisk.hpp"
 #include "dobby.h"
-#include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
@@ -18,15 +17,19 @@ static std::string SECURITY_PATCH;
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define JSON_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
+#define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.prop"
+
+#define MAX_LINE_LENGTH 256
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static volatile T_Callback propCallback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || propCallback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
@@ -35,7 +38,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s] -> %s", name, value);
 
-    return propCallback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -46,23 +49,56 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    propCallback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
-static void doHook() {
-    std::ifstream ifs("/data/data/com.google.android.gms/pif.json");
+static void parsePropsFile(const char *filename) {
+    LOGD("Proceed to parse '%s' file", filename);
 
-    auto json = nlohmann::json::parse(ifs, nullptr, false);
+    FILE *file = fopen(filename, "r");
 
-    ifs.close();
+    char line[MAX_LINE_LENGTH];
 
-    LOGD("Loaded %d keys from pif.json", static_cast<int>(json.size()));
+    while (fgets(line, sizeof(line), file) != nullptr) {
 
-    API_LEVEL = json["API_LEVEL"].get<std::string>();
-    SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+        std::string key, value;
 
-    json.clear();
+        char *data = strtok(line, "=");
+
+        while (data) {
+            if (key.empty()) {
+                key = data;
+            } else {
+                value = data;
+            }
+            data = strtok(nullptr, "=");
+        }
+
+        key.erase(std::remove_if(key.begin(), key.end(),
+                                 [](unsigned char x) { return std::isspace(x); }), key.end());
+        value.erase(std::remove_if(value.begin(), value.end(),
+                                   [](unsigned char x) { return std::isspace(x); }), value.end());
+
+        if (key == "SECURITY_PATCH") {
+            SECURITY_PATCH = value;
+            LOGD("Set SECURITY_PATCH to '%s'", value.c_str());
+        } else if (key == "API_LEVEL") {
+            API_LEVEL = value;
+            LOGD("Set API_LEVEL to '%s'", value.c_str());
+        }
+
+        key.clear();
+        value.clear();
+        key.shrink_to_fit();
+        key.shrink_to_fit();
+    }
+
+    fclose(file);
+}
+
+static void doHook(const std::string &str) {
+    parsePropsFile(str.c_str());
 
     void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
     if (handle == nullptr) {
@@ -95,19 +131,24 @@ public:
 
         if (isGmsUnstable) {
 
+            callbacks.clear();
+            API_LEVEL.clear();
+            SECURITY_PATCH.clear();
+            API_LEVEL.shrink_to_fit();
+            SECURITY_PATCH.shrink_to_fit();
+
             int fd = api->connectCompanion();
 
             auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-            std::string dir(rawDir);
+            propsFile = rawDir;
             env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
 
-            int strSize = static_cast<int>(dir.size());
+            propsFile = propsFile + "/pif.prop";
+
+            int strSize = static_cast<int>(propsFile.size());
 
             write(fd, &strSize, sizeof(strSize));
-            write(fd, dir.data(), strSize);
-
-            dir.clear();
-            dir.shrink_to_fit();
+            write(fd, propsFile.data(), strSize);
 
             long size;
             read(fd, &size, sizeof(size));
@@ -128,9 +169,15 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (!isGmsUnstable) return;
 
-        doHook();
+        doHook(propsFile);
 
         if (!moduleDex.empty()) injectDex();
+
+        LOGD("clean");
+        propsFile.clear();
+        propsFile.shrink_to_fit();
+        moduleDex.clear();
+        moduleDex.shrink_to_fit();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -141,6 +188,7 @@ private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
     bool isGmsUnstable = false;
+    std::string propsFile;
     std::vector<char> moduleDex;
 
     void injectDex() {
@@ -170,10 +218,6 @@ private:
         auto entryClass = (jclass) entryClassObj;
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
-
-        LOGD("clean");
-        moduleDex.clear();
-        moduleDex.shrink_to_fit();
     }
 };
 
@@ -181,28 +225,30 @@ static void companion(int fd) {
     int strSize;
     read(fd, &strSize, sizeof(strSize));
 
-    std::string file;
+    std::string propsFile;
 
-    file.resize(strSize);
-    read(fd, file.data(), strSize);
+    propsFile.resize(strSize);
+    read(fd, propsFile.data(), strSize);
 
-    file = file + "/pif.json";
-
-    LOGD("Json path: %s", file.c_str());
-
-    std::filesystem::copy_file(JSON_FILE_PATH, file,
+    std::filesystem::copy_file(PROP_FILE_PATH, propsFile,
                                std::filesystem::copy_options::overwrite_existing);
-    std::filesystem::permissions(file, std::filesystem::perms::all);
+    std::filesystem::permissions(propsFile, std::filesystem::perms::others_all);
 
-    std::ifstream dex(DEX_FILE_PATH, std::ifstream::binary | std::ifstream::ate);
+    propsFile.clear();
+    propsFile.shrink_to_fit();
 
-    long size = dex.tellg();
-    dex.seekg(std::ifstream::beg);
+    FILE *dex = fopen(DEX_FILE_PATH, "rb");
+
+    fseek(dex, 0, SEEK_END);
+    long size = ftell(dex);
+    fseek(dex, 0, SEEK_SET);
 
     char buffer[size];
-    dex.read(buffer, size);
+    fread(buffer, 1, size, dex);
 
-    dex.close();
+    fclose(dex);
+
+    buffer[size] = '\0';
 
     write(fd, &size, sizeof(size));
     write(fd, buffer, size);
