@@ -55,6 +55,26 @@ Follow this steps:
 
 Reboot and done!
 
+## Troubleshooting
+
+### Fails to meet device integrity (KernelSU)
+
+- Disable ZygiskNext
+- Reboot
+- Enable ZygiskNext
+
+### Passes device integrity, but fails in Wallet (even after clearing cache)
+
+- Remove all data from Google Play Services
+
+<details>
+<summary>Guide</summary>
+
+![Google services cache](./wallet-troubleshoot-1.jpg)
+![Removing all data](./wallet-troubleshoot-2.jpg)
+
+</details>
+
 ## Read module logs
 
 You can read module logs using this command:
