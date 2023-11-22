@@ -17,18 +17,16 @@ import java.util.Properties;
 
 public final class EntryPoint {
     private static final Properties props = new Properties();
-    private static final File file = new File("/data/data/com.google.android.gms/pif.prop");
+    private static final File file = new File("/data/data/com.google.android.gms/cache/pif.prop");
 
     public static void init() {
 
         try (Reader reader = new FileReader(file)) {
             props.load(reader);
+            LOG("Loaded " + props.size() + " fields!");
         } catch (IOException e) {
-            LOG("Couldn't load pif.prop file!");
-            return;
+            LOG("Couldn't load pif.prop file: " + e);
         }
-
-        LOG("Loaded " + props.size() + " fields!");
 
         spoofDevice();
         spoofProvider();
@@ -62,13 +60,13 @@ public final class EntryPoint {
     }
 
     public static void spoofDevice() {
-        setProp("PRODUCT", props.getProperty("PRODUCT"));
-        setProp("DEVICE", props.getProperty("DEVICE"));
-        setProp("MANUFACTURER", props.getProperty("MANUFACTURER"));
-        setProp("BRAND", props.getProperty("BRAND"));
-        setProp("MODEL", props.getProperty("MODEL"));
-        setProp("FINGERPRINT", props.getProperty("FINGERPRINT"));
-        setVersionProp("SECURITY_PATCH", props.getProperty("SECURITY_PATCH"));
+        setProp("PRODUCT", props.getProperty("PRODUCT", "bullhead"));
+        setProp("DEVICE", props.getProperty("DEVICE", "bullhead"));
+        setProp("MANUFACTURER", props.getProperty("MANUFACTURER", "LGE"));
+        setProp("BRAND", props.getProperty("BRAND", "google"));
+        setProp("MODEL", props.getProperty("MODEL", "Nexus 5X"));
+        setProp("FINGERPRINT", props.getProperty("FINGERPRINT", "google/bullhead/bullhead:8.0.0/OPR6.170623.013/4283548:user/release-keys"));
+        setVersionProp("SECURITY_PATCH", props.getProperty("SECURITY_PATCH", "2017-08-05"));
     }
 
     private static void setProp(String name, String value) {

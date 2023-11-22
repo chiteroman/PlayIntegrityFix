@@ -28,8 +28,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += setOf("-DANDROID_STL=none", "-DCMAKE_BUILD_TYPE=MinSizeRel")
-                cFlags += setOf("-flto=full", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-ffunction-sections", "-fdata-sections")
-                cppFlags += setOf("-std=c++20", "-fno-exceptions", "-fno-rtti", "-flto=full", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-ffunction-sections", "-fdata-sections")
+                cppFlags += setOf("-std=c++20", "-fno-exceptions", "-fno-rtti", "-fvisibility=hidden", "-fvisibility-inlines-hidden")
             }
         }
     }

@@ -19,8 +19,6 @@ static std::string SECURITY_PATCH;
 
 #define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.prop"
 
-#define MAX_LINE_LENGTH 256
-
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
 static std::map<void *, T_Callback> callbacks;
@@ -33,8 +31,19 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     std::string_view prop(name);
 
-    if (prop.ends_with("api_level")) value = API_LEVEL.c_str();
-    else if (prop.ends_with("security_patch")) value = SECURITY_PATCH.c_str();
+    if (prop.ends_with("api_level")) {
+        if (API_LEVEL.empty()) {
+            value = nullptr;
+        } else {
+            value = API_LEVEL.c_str();
+        }
+    } else if (prop.ends_with("security_patch")) {
+        if (SECURITY_PATCH.empty()) {
+            value = nullptr;
+        } else {
+            value = SECURITY_PATCH.c_str();
+        }
+    }
 
     if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s] -> %s", name, value);
 
@@ -58,9 +67,9 @@ static void parsePropsFile(const char *filename) {
 
     FILE *file = fopen(filename, "r");
 
-    char line[MAX_LINE_LENGTH];
+    char line[256];
 
-    while (fgets(line, sizeof(line), file) != nullptr) {
+    while (fgets(line, sizeof(line), file)) {
 
         std::string key, value;
 
@@ -83,31 +92,19 @@ static void parsePropsFile(const char *filename) {
         if (key == "SECURITY_PATCH") {
             SECURITY_PATCH = value;
             LOGD("Set SECURITY_PATCH to '%s'", value.c_str());
-        } else if (key == "API_LEVEL") {
+        } else if (key == "FIRST_API_LEVEL") {
             API_LEVEL = value;
             LOGD("Set API_LEVEL to '%s'", value.c_str());
         }
 
         key.clear();
+        key.shrink_to_fit();
+
         value.clear();
-        key.shrink_to_fit();
-        key.shrink_to_fit();
+        value.shrink_to_fit();
     }
 
     fclose(file);
-}
-
-static void doHook(const std::string &str) {
-    parsePropsFile(str.c_str());
-
-    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
-    if (handle == nullptr) {
-        LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
-        return;
-    }
-    LOGD("Found '__system_property_read_callback' handle at %p", handle);
-    DobbyHook(handle, (void *) my_system_property_read_callback,
-              (void **) &o_system_property_read_callback);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -129,49 +126,49 @@ public:
 
         if (isGms) api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (isGmsUnstable) {
-
-            callbacks.clear();
-            API_LEVEL.clear();
-            SECURITY_PATCH.clear();
-            API_LEVEL.shrink_to_fit();
-            SECURITY_PATCH.shrink_to_fit();
-
-            int fd = api->connectCompanion();
-
-            auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-            propsFile = rawDir;
-            env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-
-            propsFile = propsFile + "/pif.prop";
-
-            int strSize = static_cast<int>(propsFile.size());
-
-            write(fd, &strSize, sizeof(strSize));
-            write(fd, propsFile.data(), strSize);
-
-            long size;
-            read(fd, &size, sizeof(size));
-
-            char buffer[size];
-            read(fd, buffer, size);
-
-            close(fd);
-
-            moduleDex.insert(moduleDex.end(), buffer, buffer + size);
-
+        if (!isGmsUnstable) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        callbacks.clear();
+
+        API_LEVEL.clear();
+        API_LEVEL.shrink_to_fit();
+
+        SECURITY_PATCH.clear();
+        SECURITY_PATCH.shrink_to_fit();
+
+        int fd = api->connectCompanion();
+
+        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        propsFile = rawDir;
+        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+
+        propsFile = propsFile + "/cache/pif.prop";
+
+        int strSize = static_cast<int>(propsFile.size());
+
+        write(fd, &strSize, sizeof(strSize));
+        write(fd, propsFile.data(), strSize);
+
+        long size;
+        read(fd, &size, sizeof(size));
+
+        char buffer[size];
+        read(fd, buffer, size);
+
+        close(fd);
+
+        moduleDex.insert(moduleDex.end(), buffer, buffer + size);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (!isGmsUnstable) return;
 
-        doHook(propsFile);
+        doHook();
 
-        if (!moduleDex.empty()) injectDex();
+        injectDex();
 
         LOGD("clean");
         propsFile.clear();
@@ -191,7 +188,25 @@ private:
     std::string propsFile;
     std::vector<char> moduleDex;
 
+    void doHook() {
+        if (!propsFile.empty()) parsePropsFile(propsFile.c_str());
+
+        void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+        if (handle == nullptr) {
+            LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
+            return;
+        }
+        LOGD("Found '__system_property_read_callback' handle at %p", handle);
+        DobbyHook(handle, (void *) my_system_property_read_callback,
+                  (void **) &o_system_property_read_callback);
+    }
+
     void injectDex() {
+        if (moduleDex.empty()) {
+            LOGD("Dex not loaded in memory");
+            return;
+        }
+
         LOGD("Preparing to inject %d bytes to the process", static_cast<int>(moduleDex.size()));
 
         LOGD("get system classloader");
@@ -232,7 +247,7 @@ static void companion(int fd) {
 
     std::filesystem::copy_file(PROP_FILE_PATH, propsFile,
                                std::filesystem::copy_options::overwrite_existing);
-    std::filesystem::permissions(propsFile, std::filesystem::perms::others_all);
+    std::filesystem::permissions(propsFile, std::filesystem::perms::all);
 
     propsFile.clear();
     propsFile.shrink_to_fit();
