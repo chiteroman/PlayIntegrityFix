@@ -4,16 +4,13 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <filesystem>
 
 #include "zygisk.hpp"
 #include "dobby.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-static std::string API_LEVEL;
-
-static std::string SECURITY_PATCH;
+static std::string SECURITY_PATCH, FIRST_API_LEVEL;
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
@@ -32,10 +29,10 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        if (API_LEVEL.empty()) {
+        if (FIRST_API_LEVEL.empty()) {
             value = nullptr;
         } else {
-            value = API_LEVEL.c_str();
+            value = FIRST_API_LEVEL.c_str();
         }
     } else if (prop.ends_with("security_patch")) {
         if (SECURITY_PATCH.empty()) {
@@ -62,49 +59,15 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
-static void parsePropsFile(const char *filename) {
-    LOGD("Proceed to parse '%s' file", filename);
-
-    FILE *file = fopen(filename, "r");
-
-    char line[256];
-
-    while (fgets(line, sizeof(line), file)) {
-
-        std::string key, value;
-
-        char *data = strtok(line, "=");
-
-        while (data) {
-            if (key.empty()) {
-                key = data;
-            } else {
-                value = data;
-            }
-            data = strtok(nullptr, "=");
-        }
-
-        key.erase(std::remove_if(key.begin(), key.end(),
-                                 [](unsigned char x) { return std::isspace(x); }), key.end());
-        value.erase(std::remove_if(value.begin(), value.end(),
-                                   [](unsigned char x) { return std::isspace(x); }), value.end());
-
-        if (key == "SECURITY_PATCH") {
-            SECURITY_PATCH = value;
-            LOGD("Set SECURITY_PATCH to '%s'", value.c_str());
-        } else if (key == "FIRST_API_LEVEL") {
-            API_LEVEL = value;
-            LOGD("Set API_LEVEL to '%s'", value.c_str());
-        }
-
-        key.clear();
-        key.shrink_to_fit();
-
-        value.clear();
-        value.shrink_to_fit();
+static void doHook() {
+    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    if (handle == nullptr) {
+        LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
+        return;
     }
-
-    fclose(file);
+    LOGD("Found '__system_property_read_callback' handle at %p", handle);
+    DobbyHook(handle, (void *) my_system_property_read_callback,
+              (void **) &o_system_property_read_callback);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -131,26 +94,26 @@ public:
             return;
         }
 
-        callbacks.clear();
-
-        API_LEVEL.clear();
-        API_LEVEL.shrink_to_fit();
-
-        SECURITY_PATCH.clear();
-        SECURITY_PATCH.shrink_to_fit();
-
         int fd = api->connectCompanion();
 
-        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-        propsFile = rawDir;
-        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+        int mapSize;
+        read(fd, &mapSize, sizeof(mapSize));
 
-        propsFile = propsFile + "/cache/pif.prop";
+        for (int i = 0; i < mapSize; ++i) {
+            int keyLenght, valueLenght;
+            std::string key, value;
 
-        int strSize = static_cast<int>(propsFile.size());
+            read(fd, &keyLenght, sizeof(keyLenght));
+            read(fd, &valueLenght, sizeof(valueLenght));
 
-        write(fd, &strSize, sizeof(strSize));
-        write(fd, propsFile.data(), strSize);
+            key.resize(keyLenght);
+            value.resize(valueLenght);
+
+            read(fd, key.data(), keyLenght);
+            read(fd, value.data(), valueLenght);
+
+            props.insert({key, value});
+        }
 
         long size;
         read(fd, &size, sizeof(size));
@@ -161,6 +124,16 @@ public:
         close(fd);
 
         moduleDex.insert(moduleDex.end(), buffer, buffer + size);
+
+        LOGD("Received from socket %d props!", static_cast<int>(props.size()));
+
+        for (const auto &item: props) {
+            if (item.first == "SECURITY_PATCH") {
+                SECURITY_PATCH = item.second;
+            } else if (item.first == "FIRST_API_LEVEL") {
+                FIRST_API_LEVEL = item.second;
+            }
+        }
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
@@ -168,13 +141,12 @@ public:
 
         doHook();
 
-        injectDex();
+        inject();
 
         LOGD("clean");
-        propsFile.clear();
-        propsFile.shrink_to_fit();
         moduleDex.clear();
         moduleDex.shrink_to_fit();
+        props.clear();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -185,25 +157,17 @@ private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
     bool isGmsUnstable = false;
-    std::string propsFile;
+    std::map<std::string, std::string> props;
     std::vector<char> moduleDex;
 
-    void doHook() {
-        if (!propsFile.empty()) parsePropsFile(propsFile.c_str());
-
-        void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
-        if (handle == nullptr) {
-            LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
-            return;
-        }
-        LOGD("Found '__system_property_read_callback' handle at %p", handle);
-        DobbyHook(handle, (void *) my_system_property_read_callback,
-                  (void **) &o_system_property_read_callback);
-    }
-
-    void injectDex() {
+    void inject() {
         if (moduleDex.empty()) {
             LOGD("Dex not loaded in memory");
+            return;
+        }
+
+        if (props.empty()) {
+            LOGD("No props loaded in memory");
             return;
         }
 
@@ -229,28 +193,82 @@ private:
         auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
         auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
 
-        LOGD("call init");
         auto entryClass = (jclass) entryClassObj;
+
+        LOGD("call add prop");
+        auto addProp = env->GetStaticMethodID(entryClass, "addProp",
+                                              "(Ljava/lang/String;Ljava/lang/String;)V");
+        for (const auto &item: props) {
+            auto key = env->NewStringUTF(item.first.c_str());
+            auto value = env->NewStringUTF(item.second.c_str());
+            env->CallStaticVoidMethod(entryClass, addProp, key, value);
+        }
+
+        LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
     }
 };
 
+static void parsePropsFile(int fd) {
+    LOGD("Proceed to parse '%s' file", PROP_FILE_PATH);
+
+    std::map<std::string, std::string> props;
+
+    FILE *file = fopen(PROP_FILE_PATH, "r");
+
+    char line[256];
+
+    while (fgets(line, sizeof(line), file)) {
+
+        std::string key, value;
+
+        char *data = strtok(line, "=");
+
+        while (data) {
+            if (key.empty()) {
+                key = data;
+            } else {
+                value = data;
+            }
+            data = strtok(nullptr, "=");
+        }
+
+        key.erase(std::remove_if(key.begin(), key.end(),
+                                 [](unsigned char x) { return std::isspace(x); }), key.end());
+        value.erase(std::remove(value.begin(), value.end(), '\n'), value.cend());
+
+        props.insert({key, value});
+
+        key.clear();
+        key.shrink_to_fit();
+
+        value.clear();
+        value.shrink_to_fit();
+    }
+
+    fclose(file);
+
+    int mapSize = static_cast<int>(props.size());
+
+    write(fd, &mapSize, sizeof(mapSize));
+
+    for (const auto &item: props) {
+        int keyLenght = static_cast<int>(item.first.size());
+        int valueLenght = static_cast<int>(item.second.size());
+
+        write(fd, &keyLenght, sizeof(keyLenght));
+        write(fd, &valueLenght, sizeof(valueLenght));
+
+        write(fd, item.first.data(), keyLenght);
+        write(fd, item.second.data(), valueLenght);
+    }
+
+    props.clear();
+}
+
 static void companion(int fd) {
-    int strSize;
-    read(fd, &strSize, sizeof(strSize));
-
-    std::string propsFile;
-
-    propsFile.resize(strSize);
-    read(fd, propsFile.data(), strSize);
-
-    std::filesystem::copy_file(PROP_FILE_PATH, propsFile,
-                               std::filesystem::copy_options::overwrite_existing);
-    std::filesystem::permissions(propsFile, std::filesystem::perms::all);
-
-    propsFile.clear();
-    propsFile.shrink_to_fit();
+    parsePropsFile(fd);
 
     FILE *dex = fopen(DEX_FILE_PATH, "rb");
 
