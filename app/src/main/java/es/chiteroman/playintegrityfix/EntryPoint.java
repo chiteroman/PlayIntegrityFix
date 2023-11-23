@@ -53,13 +53,13 @@ public final class EntryPoint {
     }
 
     public static void spoofDevice() {
-        setProp("PRODUCT", map.get("PRODUCT"));
-        setProp("DEVICE", map.get("DEVICE"));
-        setProp("MANUFACTURER", map.get("MANUFACTURER"));
-        setProp("BRAND", map.get("BRAND"));
-        setProp("MODEL", map.get("MODEL"));
-        setProp("FINGERPRINT", map.get("FINGERPRINT"));
-        setVersionProp("SECURITY_PATCH", map.get("SECURITY_PATCH"));
+        setProp("PRODUCT", map.getOrDefault("PRODUCT", "bullhead"));
+        setProp("DEVICE", map.getOrDefault("DEVICE", "bullhead"));
+        setProp("MANUFACTURER", map.getOrDefault("MANUFACTURER", "LGE"));
+        setProp("BRAND", map.getOrDefault("BRAND", "google"));
+        setProp("MODEL", map.getOrDefault("MODEL", "Nexus 5X"));
+        setProp("FINGERPRINT", map.getOrDefault("FINGERPRINT", "google/bullhead/bullhead:8.0.0/OPR6.170623.013/4283548:user/release-keys"));
+        setVersionProp("SECURITY_PATCH", map.getOrDefault("SECURITY_PATCH", "2017-08-05"));
     }
 
     private static void setProp(String name, String value) {

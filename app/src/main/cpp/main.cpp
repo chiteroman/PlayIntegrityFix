@@ -4,27 +4,27 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <fstream>
+#include <sstream>
 
 #include "zygisk.hpp"
-#include "dobby.h"
+#include "shadowhook.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
-
-static std::string SECURITY_PATCH, FIRST_API_LEVEL;
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.prop"
 
+static std::string SECURITY_PATCH, FIRST_API_LEVEL;
+
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
+static T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr ||
-        !callbacks.contains(cookie))
-        return;
+    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
     std::string_view prop(name);
 
@@ -44,30 +44,33 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s] -> %s", name, value);
 
-    return callbacks[cookie](cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
 
 static void
 my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
-
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    callbacks[cookie] = callback;
+    o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+    void *handle = shadowhook_hook_sym_name(
+            "libc.so",
+            "__system_property_read_callback",
+            (void *) my_system_property_read_callback,
+            (void **) &o_system_property_read_callback
+    );
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
-    DobbyHook(handle, (void *) my_system_property_read_callback,
-              (void **) &o_system_property_read_callback);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -96,10 +99,30 @@ public:
 
         int fd = api->connectCompanion();
 
-        int mapSize;
+        long size = 0;
+        read(fd, &size, sizeof(size));
+
+        if (size < 1) {
+            close(fd);
+            LOGD("Couldn't read classes.dex from socket! File exists?");
+            return;
+        }
+
+        moduleDex.resize(size);
+        read(fd, moduleDex.data(), size);
+
+        int mapSize = 0;
         read(fd, &mapSize, sizeof(mapSize));
 
-        for (int i = 0; i < mapSize; ++i) {
+        if (mapSize < 1) {
+            close(fd);
+            SECURITY_PATCH = "2017-08-05";
+            FIRST_API_LEVEL = "23";
+            LOGD("Couldn't read pif.prop from socket! File exists?");
+            return;
+        }
+
+        for (int i = 0; i < size; ++i) {
             int keyLenght, valueLenght;
             std::string key, value;
 
@@ -112,18 +135,8 @@ public:
             read(fd, key.data(), keyLenght);
             read(fd, value.data(), valueLenght);
 
-            props.insert({key, value});
+            props[key] = value;
         }
-
-        long size;
-        read(fd, &size, sizeof(size));
-
-        char buffer[size];
-        read(fd, buffer, size);
-
-        close(fd);
-
-        moduleDex.insert(moduleDex.end(), buffer, buffer + size);
 
         LOGD("Received from socket %d props!", static_cast<int>(props.size()));
 
@@ -134,6 +147,8 @@ public:
                 FIRST_API_LEVEL = item.second;
             }
         }
+
+        close(fd);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
@@ -166,11 +181,6 @@ private:
             return;
         }
 
-        if (props.empty()) {
-            LOGD("No props loaded in memory");
-            return;
-        }
-
         LOGD("Preparing to inject %d bytes to the process", static_cast<int>(moduleDex.size()));
 
         LOGD("get system classloader");
@@ -195,13 +205,15 @@ private:
 
         auto entryClass = (jclass) entryClassObj;
 
-        LOGD("call add prop");
-        auto addProp = env->GetStaticMethodID(entryClass, "addProp",
-                                              "(Ljava/lang/String;Ljava/lang/String;)V");
-        for (const auto &item: props) {
-            auto key = env->NewStringUTF(item.first.c_str());
-            auto value = env->NewStringUTF(item.second.c_str());
-            env->CallStaticVoidMethod(entryClass, addProp, key, value);
+        if (!props.empty()) {
+            LOGD("call add prop");
+            auto addProp = env->GetStaticMethodID(entryClass, "addProp",
+                                                  "(Ljava/lang/String;Ljava/lang/String;)V");
+            for (const auto &item: props) {
+                auto key = env->NewStringUTF(item.first.c_str());
+                auto value = env->NewStringUTF(item.second.c_str());
+                env->CallStaticVoidMethod(entryClass, addProp, key, value);
+            }
         }
 
         LOGD("call init");
@@ -210,44 +222,42 @@ private:
     }
 };
 
-static void parsePropsFile(int fd) {
-    LOGD("Proceed to parse '%s' file", PROP_FILE_PATH);
+static void companion(int fd) {
+    std::ifstream dex(DEX_FILE_PATH, std::ios::binary | std::ios::ate);
+
+    long size = static_cast<long>(dex.tellg());
+    dex.seekg(std::ios::beg);
+
+    char buffer[size];
+    dex.read(buffer, size);
+
+    dex.close();
+
+    write(fd, &size, sizeof(size));
+    write(fd, buffer, size);
+
+    std::ifstream prop(PROP_FILE_PATH);
+
+    if (prop.bad()) {
+        prop.close();
+        int i = 0;
+        write(fd, &i, sizeof(i));
+        return;
+    }
 
     std::map<std::string, std::string> props;
 
-    FILE *file = fopen(PROP_FILE_PATH, "r");
-
-    char line[256];
-
-    while (fgets(line, sizeof(line), file)) {
-
+    std::string line;
+    while (std::getline(prop, line)) {
+        std::istringstream iss(line);
         std::string key, value;
 
-        char *data = strtok(line, "=");
-
-        while (data) {
-            if (key.empty()) {
-                key = data;
-            } else {
-                value = data;
-            }
-            data = strtok(nullptr, "=");
+        if (std::getline(iss, key, '=') && std::getline(iss, value)) {
+            props[key] = value;
         }
-
-        key.erase(std::remove_if(key.begin(), key.end(),
-                                 [](unsigned char x) { return std::isspace(x); }), key.end());
-        value.erase(std::remove(value.begin(), value.end(), '\n'), value.cend());
-
-        props.insert({key, value});
-
-        key.clear();
-        key.shrink_to_fit();
-
-        value.clear();
-        value.shrink_to_fit();
     }
 
-    fclose(file);
+    prop.close();
 
     int mapSize = static_cast<int>(props.size());
 
@@ -263,28 +273,6 @@ static void parsePropsFile(int fd) {
         write(fd, item.first.data(), keyLenght);
         write(fd, item.second.data(), valueLenght);
     }
-
-    props.clear();
-}
-
-static void companion(int fd) {
-    parsePropsFile(fd);
-
-    FILE *dex = fopen(DEX_FILE_PATH, "rb");
-
-    fseek(dex, 0, SEEK_END);
-    long size = ftell(dex);
-    fseek(dex, 0, SEEK_SET);
-
-    char buffer[size];
-    fread(buffer, 1, size, dex);
-
-    fclose(dex);
-
-    buffer[size] = '\0';
-
-    write(fd, &size, sizeof(size));
-    write(fd, buffer, size);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
