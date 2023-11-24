@@ -1,10 +1,10 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <string>
+#include <string_view>
 #include <vector>
 #include <map>
-#include <filesystem>
+#include <fstream>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
@@ -13,41 +13,31 @@
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.prop"
+#define FIRST_API_LEVEL "23"
 
-#define DEFAULT_SECURITY_PATCH "2017-08-05"
-
-#define DEFAULT_FIRST_API_LEVEL "23"
-
-static std::string SECURITY_PATCH, FIRST_API_LEVEL;
+#define SECURITY_PATCH "2017-08-05"
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
-    std::string prop(name);
+    std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        if (FIRST_API_LEVEL.empty()) {
-            value = nullptr;
-        } else {
-            value = FIRST_API_LEVEL.c_str();
-        }
+        value = FIRST_API_LEVEL;
     } else if (prop.ends_with("security_patch")) {
-        if (SECURITY_PATCH.empty()) {
-            value = nullptr;
-        } else {
-            value = SECURITY_PATCH.c_str();
-        }
+        value = SECURITY_PATCH;
     }
 
     if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s] -> %s", name, value);
 
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -57,7 +47,7 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -66,8 +56,8 @@ static void doHook() {
     void *handle = shadowhook_hook_sym_name(
             "libc.so",
             "__system_property_read_callback",
-            (void *) my_system_property_read_callback,
-            (void **) &o_system_property_read_callback
+            reinterpret_cast<void *>(my_system_property_read_callback),
+            reinterpret_cast<void **>(&o_system_property_read_callback)
     );
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
@@ -85,49 +75,39 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
         auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
-        std::string process(rawProcess);
+        std::string_view process(rawProcess);
+        bool isGms = process.starts_with("com.google.android.gms");
+        bool isGmsUnstable = process.compare("com.google.android.gms.unstable") == 0;
         env->ReleaseStringUTFChars(args->nice_name, rawProcess);
 
-        if (process.starts_with("com.google.android.gms")) {
-
-            api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
-
-            if (process == "com.google.android.gms.unstable") {
-
-                isGmsUnstable = true;
-
-                auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-                dir = std::string(rawDir);
-                env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-
-                auto fd = api->connectCompanion();
-
-                write(fd, dir.data(), dir.size());
-
-                int temp;
-                read(fd, &temp, sizeof(temp));
-
-                close(fd);
-
-                return;
-            }
+        if (!isGms) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
         }
 
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+
+        if (!isGmsUnstable) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        int fd = api->connectCompanion();
+
+        char buffer[10000];
+        auto size = read(fd, buffer, sizeof(buffer));
+
+        close(fd);
+
+        moduleDex.insert(moduleDex.end(), buffer, buffer + size);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (!isGmsUnstable) return;
-
-        readDexFile();
-
-        readPropsFile();
-
-        doHook();
+        if (moduleDex.empty()) return;
 
         inject();
 
-        clean();
+        doHook();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -137,89 +117,9 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    bool isGmsUnstable = false;
-    std::string dir;
     std::vector<char> moduleDex;
-    std::map<std::string, std::string> props;
-
-    void clean() {
-        dir.clear();
-        moduleDex.clear();
-        props.clear();
-    }
-
-    void readPropsFile() {
-        std::string f = dir + "/pif.prop";
-
-        FILE *file = fopen(f.c_str(), "r");
-
-        if (file == nullptr) {
-            SECURITY_PATCH = DEFAULT_SECURITY_PATCH;
-            FIRST_API_LEVEL = DEFAULT_FIRST_API_LEVEL;
-            LOGD("File pif.prop doesn't exist, using default values");
-            return;
-        }
-
-        char buffer[256];
-        while (fgets(buffer, sizeof(buffer), file)) {
-
-            char *rawKey = strtok(buffer, "=");
-            char *rawValue = strtok(nullptr, "=");
-
-            if (rawKey == nullptr) continue;
-
-            std::string key(rawKey);
-            std::string value(rawValue);
-
-            key.erase(std::remove_if(key.begin(), key.end(), [](unsigned char x) {
-                return std::isspace(x);
-            }), key.end());
-
-            value.erase(std::remove(value.begin(), value.end(), '\n'), value.end());
-
-            props[key] = value;
-        }
-
-        fclose(file);
-
-        std::filesystem::remove(f);
-
-        LOGD("Read %d props from file!", static_cast<int>(props.size()));
-
-        SECURITY_PATCH = props["SECURITY_PATCH"];
-        FIRST_API_LEVEL = props["FIRST_API_LEVEL"];
-    }
-
-    void readDexFile() {
-        std::string f = dir + "/classes.dex";
-
-        FILE *file = fopen(f.c_str(), "rb");
-
-        if (file == nullptr) {
-            LOGD("File classes.dex doesn't exist. This is weird... Report to @chiteroman");
-            return;
-        }
-
-        fseek(file, 0, SEEK_END);
-        long size = ftell(file);
-        fseek(file, 0, SEEK_SET);
-
-        char buffer[size];
-        fread(buffer, 1, size, file);
-
-        fclose(file);
-
-        std::filesystem::remove(f);
-
-        moduleDex.insert(moduleDex.end(), buffer, buffer + size);
-    }
 
     void inject() {
-        if (moduleDex.empty()) {
-            LOGD("ERROR! Dex in memory is empty!");
-            return;
-        }
-
         LOGD("Preparing to inject %d bytes to the process", static_cast<int>(moduleDex.size()));
 
         LOGD("get system classloader");
@@ -244,45 +144,28 @@ private:
 
         auto entryClass = (jclass) entryClassObj;
 
-        if (!props.empty()) {
-            LOGD("call add prop");
-            auto addProp = env->GetStaticMethodID(entryClass, "addProp",
-                                                  "(Ljava/lang/String;Ljava/lang/String;)V");
-            for (const auto &item: props) {
-                auto key = env->NewStringUTF(item.first.c_str());
-                auto value = env->NewStringUTF(item.second.c_str());
-                env->CallStaticVoidMethod(entryClass, addProp, key, value);
-            }
-        }
-
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
+
+        moduleDex.clear();
     }
 };
 
 static void companion(int fd) {
-    char buffer[256];
-    auto bytes = read(fd, buffer, sizeof(buffer));
+    std::ifstream dex(DEX_FILE_PATH, std::ios::binary | std::ios::ate);
 
-    std::string file(buffer, bytes);
-    LOGD("[ROOT] Read file: %s", file.c_str());
+    long size = dex.tellg();
+    dex.seekg(std::ios::beg);
 
-    std::string dex = file + "/classes.dex";
-    std::string prop = file + "/pif.prop";
+    char buffer[size];
+    dex.read(buffer, size);
 
-    if (std::filesystem::copy_file(DEX_FILE_PATH, dex,
-                                   std::filesystem::copy_options::overwrite_existing)) {
-        std::filesystem::permissions(dex, std::filesystem::perms::all);
-    }
+    dex.close();
 
-    if (std::filesystem::copy_file(PROP_FILE_PATH, prop,
-                                   std::filesystem::copy_options::overwrite_existing)) {
-        std::filesystem::permissions(prop, std::filesystem::perms::all);
-    }
+    write(fd, buffer, size);
 
-    int temp = 1;
-    write(fd, &temp, sizeof(temp));
+    close(fd);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

@@ -9,21 +9,12 @@ import java.security.KeyStoreException;
 import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
-import java.util.HashMap;
-import java.util.Map;
 
 public final class EntryPoint {
-    private static final Map<String, String> map = new HashMap<>();
 
     public static void init() {
         spoofProvider();
         spoofDevice();
-    }
-
-    public static void addProp(String key, String value) {
-        if (key == null || value == null || key.isEmpty() || value.isEmpty()) return;
-        map.put(key, value);
-        LOG(String.format("Received from Zygisk lib: [%s] -> '%s'", key, value));
     }
 
     private static void spoofProvider() {
@@ -54,13 +45,13 @@ public final class EntryPoint {
     }
 
     public static void spoofDevice() {
-        setProp("PRODUCT", map.getOrDefault("PRODUCT", "bullhead"));
-        setProp("DEVICE", map.getOrDefault("DEVICE", "bullhead"));
-        setProp("MANUFACTURER", map.getOrDefault("MANUFACTURER", "LGE"));
-        setProp("BRAND", map.getOrDefault("BRAND", "google"));
-        setProp("MODEL", map.getOrDefault("MODEL", "Nexus 5X"));
-        setProp("FINGERPRINT", map.getOrDefault("FINGERPRINT", "google/bullhead/bullhead:8.0.0/OPR6.170623.013/4283548:user/release-keys"));
-        setVersionProp("SECURITY_PATCH", map.getOrDefault("SECURITY_PATCH", "2017-08-05"));
+        setProp("PRODUCT", "bullhead");
+        setProp("DEVICE", "bullhead");
+        setProp("MANUFACTURER", "LGE");
+        setProp("BRAND", "google");
+        setProp("MODEL", "Nexus 5X");
+        setProp("FINGERPRINT", "google/bullhead/bullhead:8.0.0/OPR6.170623.013/4283548:user/release-keys");
+        setVersionProp("SECURITY_PATCH", "2017-08-05");
     }
 
     private static void setProp(String name, String value) {
