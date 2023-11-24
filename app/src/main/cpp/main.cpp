@@ -1,21 +1,22 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <string_view>
-#include <vector>
-#include <map>
-#include <fstream>
 
 #include "zygisk.hpp"
-#include "shadowhook.h"
+#include "dobby.h"
+#include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define FIRST_API_LEVEL "23"
+#define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
 
-#define SECURITY_PATCH "2017-08-05"
+#define DEF_FIRST_API_LEVEL "23"
+
+#define DEF_SECURITY_PATCH "2017-08-05"
+
+static std::string SECURITY_PATCH, FIRST_API_LEVEL;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -30,9 +31,17 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        value = FIRST_API_LEVEL;
+        if (FIRST_API_LEVEL.empty()) {
+            value = nullptr;
+        } else {
+            value = FIRST_API_LEVEL.c_str();
+        }
     } else if (prop.ends_with("security_patch")) {
-        value = SECURITY_PATCH;
+        if (SECURITY_PATCH.empty()) {
+            value = nullptr;
+        } else {
+            value = SECURITY_PATCH.c_str();
+        }
     }
 
     if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s] -> %s", name, value);
@@ -52,18 +61,14 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
 }
 
 static void doHook() {
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
-    void *handle = shadowhook_hook_sym_name(
-            "libc.so",
-            "__system_property_read_callback",
-            reinterpret_cast<void *>(my_system_property_read_callback),
-            reinterpret_cast<void **>(&o_system_property_read_callback)
-    );
+    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
+    DobbyHook(handle, reinterpret_cast<void *>(my_system_property_read_callback),
+              reinterpret_cast<void **>(&o_system_property_read_callback));
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -74,10 +79,15 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        bool isGms = false;
+        bool isGmsUnstable = false;
+
         auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
-        std::string_view process(rawProcess);
-        bool isGms = process.starts_with("com.google.android.gms");
-        bool isGmsUnstable = process.compare("com.google.android.gms.unstable") == 0;
+        if (rawProcess) {
+            std::string_view process(rawProcess);
+            isGms = process.starts_with("com.google.android.gms");
+            isGmsUnstable = process.compare("com.google.android.gms.unstable") == 0;
+        }
         env->ReleaseStringUTFChars(args->nice_name, rawProcess);
 
         if (!isGms) {
@@ -92,20 +102,41 @@ public:
             return;
         }
 
+        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        path = rawDir;
+        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+
         int fd = api->connectCompanion();
 
-        char buffer[10000];
-        auto size = read(fd, buffer, sizeof(buffer));
+        write(fd, path.data(), path.size());
+
+        read(fd, nullptr, 0);
 
         close(fd);
-
-        moduleDex.insert(moduleDex.end(), buffer, buffer + size);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (moduleDex.empty()) return;
+        if (path.empty()) return;
 
-        inject();
+        std::string prop(path + "/cache/pif.json");
+        if (std::filesystem::exists(prop)) {
+            FILE *file = fopen(prop.c_str(), "r");
+            nlohmann::json json = nlohmann::json::parse(file, nullptr, false);
+            fclose(file);
+            LOGD("Read %d props from pif.json", static_cast<int>(json.size()));
+            SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+            FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
+            json.clear();
+        } else {
+            LOGD("File pif.json doesn't exist, using default values");
+            SECURITY_PATCH = DEF_SECURITY_PATCH;
+            FIRST_API_LEVEL = DEF_FIRST_API_LEVEL;
+        }
+
+        std::string dex(path + "/cache/classes.dex");
+        if (std::filesystem::exists(dex)) {
+            inject();
+        }
 
         doHook();
     }
@@ -117,24 +148,22 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<char> moduleDex;
+    std::string path;
 
     void inject() {
-        LOGD("Preparing to inject %d bytes to the process", static_cast<int>(moduleDex.size()));
-
         LOGD("get system classloader");
         auto clClass = env->FindClass("java/lang/ClassLoader");
         auto getSystemClassLoader = env->GetStaticMethodID(clClass, "getSystemClassLoader",
                                                            "()Ljava/lang/ClassLoader;");
         auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
-        LOGD("create buffer");
-        auto buf = env->NewDirectByteBuffer(moduleDex.data(), static_cast<jlong>(moduleDex.size()));
         LOGD("create class loader");
-        auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
-        auto dexClInit = env->GetMethodID(dexClClass, "<init>",
-                                          "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto dexCl = env->NewObject(dexClClass, dexClInit, buf, systemClassLoader);
+        auto pathClClass = env->FindClass("dalvik/system/PathClassLoader");
+        auto pathClInit = env->GetMethodID(pathClClass, "<init>",
+                                           "(Ljava/lang/String;Ljava/lang/ClassLoader;)V");
+        std::string dexPath(path + "/cache/classes.dex");
+        auto moduleDex = env->NewStringUTF(dexPath.c_str());
+        auto dexCl = env->NewObject(pathClClass, pathClInit, moduleDex, systemClassLoader);
 
         LOGD("load class");
         auto loadClass = env->GetMethodID(clClass, "loadClass",
@@ -144,28 +173,45 @@ private:
 
         auto entryClass = (jclass) entryClassObj;
 
+        LOGD("read props");
+        auto readProps = env->GetStaticMethodID(entryClass, "readProps", "(Ljava/lang/String;)V");
+        std::string prop(path + "/cache/pif.json");
+        auto javaPath = env->NewStringUTF(prop.c_str());
+        env->CallStaticVoidMethod(entryClass, readProps, javaPath);
+
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
 
-        moduleDex.clear();
+        path.clear();
     }
 };
 
 static void companion(int fd) {
-    std::ifstream dex(DEX_FILE_PATH, std::ios::binary | std::ios::ate);
+    char buffer[256];
+    long size = read(fd, buffer, sizeof(buffer));
 
-    long size = dex.tellg();
-    dex.seekg(std::ios::beg);
+    std::string path(buffer, size);
+    LOGD("[ROOT] Got GMS dir: %s", path.c_str());
 
-    char buffer[size];
-    dex.read(buffer, size);
+    std::string dex(path + "/cache/classes.dex");
+    std::string prop(path + "/cache/pif.json");
 
-    dex.close();
+    if (std::filesystem::copy_file(DEX_FILE_PATH, dex,
+                                   std::filesystem::copy_options::overwrite_existing)) {
+        std::filesystem::permissions(dex, std::filesystem::perms::owner_read |
+                                          std::filesystem::perms::group_read |
+                                          std::filesystem::perms::others_read);
+    }
 
-    write(fd, buffer, size);
+    if (std::filesystem::copy_file(PROP_FILE_PATH, prop,
+                                   std::filesystem::copy_options::overwrite_existing)) {
+        std::filesystem::permissions(prop, std::filesystem::perms::owner_read |
+                                           std::filesystem::perms::group_read |
+                                           std::filesystem::perms::others_read);
+    }
 
-    close(fd);
+    write(fd, nullptr, 0);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

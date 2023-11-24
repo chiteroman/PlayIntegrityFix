@@ -1,20 +1,52 @@
 package es.chiteroman.playintegrityfix;
 
 import android.os.Build;
+import android.util.JsonReader;
 import android.util.Log;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class EntryPoint {
+    private static final Map<String, String> map = new HashMap<>();
+
+    private static void defaultProps() {
+        map.putIfAbsent("PRODUCT", "bullhead");
+        map.putIfAbsent("DEVICE", "bullhead");
+        map.putIfAbsent("MANUFACTURER", "LGE");
+        map.putIfAbsent("BRAND", "google");
+        map.putIfAbsent("MODEL", "Nexus 5X");
+        map.putIfAbsent("FINGERPRINT", "google/bullhead/bullhead:8.0.0/OPR6.170623.013/4283548:user/release-keys");
+        map.putIfAbsent("SECURITY_PATCH", "2017-08-05");
+    }
 
     public static void init() {
         spoofProvider();
         spoofDevice();
+    }
+
+    public static void readProps(String path) {
+        LOG("Read from Zygisk lib path: " + path);
+        File file = new File(path);
+        try (JsonReader reader = new JsonReader(new FileReader(file))) {
+            reader.beginObject();
+            while (reader.hasNext()) {
+                map.put(reader.nextName(), reader.nextString());
+            }
+            reader.endObject();
+        } catch (IOException e) {
+            LOG("Couldn't read pif.prop file: " + e);
+            defaultProps();
+        }
     }
 
     private static void spoofProvider() {
@@ -45,13 +77,13 @@ public final class EntryPoint {
     }
 
     public static void spoofDevice() {
-        setProp("PRODUCT", "bullhead");
-        setProp("DEVICE", "bullhead");
-        setProp("MANUFACTURER", "LGE");
-        setProp("BRAND", "google");
-        setProp("MODEL", "Nexus 5X");
-        setProp("FINGERPRINT", "google/bullhead/bullhead:8.0.0/OPR6.170623.013/4283548:user/release-keys");
-        setVersionProp("SECURITY_PATCH", "2017-08-05");
+        setProp("PRODUCT", map.get("PRODUCT"));
+        setProp("DEVICE", map.get("DEVICE"));
+        setProp("MANUFACTURER", map.get("MANUFACTURER"));
+        setProp("BRAND", map.get("BRAND"));
+        setProp("MODEL", map.get("MODEL"));
+        setProp("FINGERPRINT", map.get("FINGERPRINT"));
+        setVersionProp("SECURITY_PATCH", map.get("SECURITY_PATCH"));
     }
 
     private static void setProp(String name, String value) {
