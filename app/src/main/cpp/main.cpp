@@ -204,6 +204,10 @@ static void companion(int fd) {
                                           std::filesystem::perms::others_read);
     }
 
+    if (!std::filesystem::exists(PROP_FILE_PATH)) {
+        std::filesystem::remove(prop);
+    }
+
     if (std::filesystem::copy_file(PROP_FILE_PATH, prop,
                                    std::filesystem::copy_options::overwrite_existing)) {
         std::filesystem::permissions(prop, std::filesystem::perms::owner_read |

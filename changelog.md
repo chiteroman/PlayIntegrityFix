@@ -2,12 +2,12 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-Also, if Google blacklist the fingerprint (again), you can post your custom pif.prop and I will update the module.
+Also, if Google blacklist the fingerprint (again), you can post your custom pif.json and I will update the module.
 
-# v13.5
+# v13.6
 
-- Remove custom resetprop.
-- Fixes in code.
+- New code!
+- Added custom resetprop.
 
-This module will backup your pif.prop into adb root folder.
-If you remove this file, module will use default props for attestation.
+Can read a custom pif.json file to spoof device props.
+Example file: module/pif.json on GitHub repo.
