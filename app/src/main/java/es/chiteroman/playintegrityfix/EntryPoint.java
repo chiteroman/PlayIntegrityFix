@@ -21,6 +21,7 @@ public final class EntryPoint {
     }
 
     public static void addProp(String key, String value) {
+        if (key == null || value == null || key.isEmpty() || value.isEmpty()) return;
         map.put(key, value);
         LOG(String.format("Received from Zygisk lib: [%s] -> '%s'", key, value));
     }
