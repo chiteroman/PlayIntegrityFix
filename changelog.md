@@ -10,8 +10,7 @@ https://t.me/playintegrityfix
 
 If you want an undetectable resetprop, use Kitsune Magisk.
 If you want to spoof your own props, modify the props in source code and build by yourself.
+Or you can use unstable build, you can download in GitHub repo.
 Should work and don't crash nothing.
-
-Maybe in a future I do a custom spoof version... But I won't release it as stable build.
 
 I recommend to clear GMS data and cache before reboot.

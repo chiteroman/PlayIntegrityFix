@@ -1,7 +1,6 @@
 id=playintegrityfix
 name=Play Integrity Fix
-version=v13.7
-versionCode=137
+version=v1.1-PROPS
+versionCode=1
 author=chiteroman
 description=Fix CTS profile (SafetyNet) and DEVICE verdict (Play Integrity).
-updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json

@@ -1,18 +1,19 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <string_view>
-#include <map>
-#include <vector>
+#include <fstream>
 
 #include "zygisk.hpp"
 #include "dobby.h"
+#include "json.hpp"
+
+#define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
+
+#define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-#define FIRST_API_LEVEL "25"
-
-#define SECURITY_PATCH "2017-08-05"
+static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -27,10 +28,18 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        value = FIRST_API_LEVEL;
+        if (FIRST_API_LEVEL == "NULL") {
+            value = nullptr;
+        } else {
+            value = FIRST_API_LEVEL.c_str();
+        }
         LOGD("[%s] -> %s", name, value);
     } else if (prop.ends_with("security_patch")) {
-        value = SECURITY_PATCH;
+        if (SECURITY_PATCH == "NULL") {
+            value = nullptr;
+        } else {
+            value = SECURITY_PATCH.c_str();
+        }
         LOGD("[%s] -> %s", name, value);
     }
 
@@ -90,22 +99,43 @@ public:
             return;
         }
 
+        ssize_t size;
+        char buffer[10000];
         int fd = api->connectCompanion();
 
-        long size;
-        char buffer[1024];
+        size = read(fd, buffer, sizeof(buffer));
 
-        while ((size = read(fd, buffer, sizeof(buffer))) > 0) {
+        if (size > 0) {
             moduleDex.insert(moduleDex.end(), buffer, buffer + size);
+        } else {
+            LOGD("Couldn't load classes.dex file in memory");
+            close(fd);
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        lseek(fd, 0, SEEK_SET);
+
+        size = read(fd, buffer, sizeof(buffer));
+
+        if (size > 0) {
+            jsonStr.insert(jsonStr.end(), buffer, buffer + size);
+        } else {
+            LOGD("Couldn't load pif.json file in memory");
         }
 
         close(fd);
 
-        LOGD("Received from socket %lu bytes!", moduleDex.size());
+        LOGD("Received 'classes.dex' file from socket: %d bytes",
+             static_cast<int>(moduleDex.size()));
+
+        LOGD("Received 'pif.json' file from socket: %d bytes", static_cast<int>(jsonStr.size()));
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (moduleDex.empty()) return;
+
+        readJson();
 
         inject();
 
@@ -120,6 +150,21 @@ private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
     std::vector<char> moduleDex;
+    std::string jsonStr;
+
+    void readJson() {
+        nlohmann::json json = nlohmann::json::parse(jsonStr, nullptr, false);
+
+        auto getStringFromJson = [&json](const std::string &key) {
+            return json.contains(key) && !json[key].is_null() ? json[key].get<std::string>()
+                                                              : "NULL";
+        };
+
+        SECURITY_PATCH = getStringFromJson("SECURITY_PATCH");
+        FIRST_API_LEVEL = getStringFromJson("FIRST_API_LEVEL");
+
+        json.clear();
+    }
 
     void inject() {
         LOGD("get system classloader");
@@ -144,34 +189,34 @@ private:
 
         auto entryClass = (jclass) entryClassObj;
 
+        LOGD("read json");
+        auto readProps = env->GetStaticMethodID(entryClass, "readJson",
+                                                "(Ljava/lang/String;)V");
+        auto javaStr = env->NewStringUTF(jsonStr.c_str());
+        env->CallStaticVoidMethod(entryClass, readProps, javaStr);
+
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
 
         moduleDex.clear();
+        jsonStr.clear();
     }
 };
 
 static void companion(int fd) {
-    FILE *file = fopen("/data/adb/modules/playintegrityfix/classes.dex", "rb");
+    std::ifstream dex(DEX_FILE_PATH, std::ios::binary);
+    std::ifstream prop(PROP_FILE_PATH);
 
-    if (file == nullptr) {
-        write(fd, nullptr, 0);
-        return;
-    }
+    std::vector<char> dexVector((std::istreambuf_iterator<char>(dex)),
+                                std::istreambuf_iterator<char>());
 
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    std::vector<char> propVector((std::istreambuf_iterator<char>(prop)),
+                                 std::istreambuf_iterator<char>());
 
-    std::vector<char> vector(size);
-    fread(vector.data(), 1, size, file);
-
-    fclose(file);
-
-    write(fd, vector.data(), size);
-
-    vector.clear();
+    write(fd, dexVector.data(), dexVector.size());
+    lseek(fd, 0, SEEK_SET);
+    write(fd, propVector.data(), propVector.size());
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
