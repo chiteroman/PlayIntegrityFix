@@ -2,12 +2,16 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-Also, if Google blacklist the fingerprint (again), you can post your custom pif.json and I will update the module.
+# v13.7
 
-# v13.6
+- Removed custom resetprop.
+- Removed custom props spoof.
+- Removed weird code.
 
-- New code!
-- Added custom resetprop.
+If you want an undetectable resetprop, use Kitsune Magisk.
+If you want to spoof your own props, modify the props in source code and build by yourself.
+Should work and don't crash nothing.
 
-Can read a custom pif.json file to spoof device props.
-Example file: module/pif.json on GitHub repo.
+Maybe in a future I do a custom spoof version... But I won't release it as stable build.
+
+I recommend to clear GMS data and cache before reboot.

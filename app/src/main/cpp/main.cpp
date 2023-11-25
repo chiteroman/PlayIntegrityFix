@@ -1,22 +1,18 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
+#include <string_view>
+#include <map>
+#include <vector>
 
 #include "zygisk.hpp"
 #include "dobby.h"
-#include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-#define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
+#define FIRST_API_LEVEL "25"
 
-#define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
-
-#define DEF_FIRST_API_LEVEL "23"
-
-#define DEF_SECURITY_PATCH "2017-08-05"
-
-static std::string SECURITY_PATCH, FIRST_API_LEVEL;
+#define SECURITY_PATCH "2017-08-05"
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -31,20 +27,12 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        if (FIRST_API_LEVEL.empty()) {
-            value = nullptr;
-        } else {
-            value = FIRST_API_LEVEL.c_str();
-        }
+        value = FIRST_API_LEVEL;
+        LOGD("[%s] -> %s", name, value);
     } else if (prop.ends_with("security_patch")) {
-        if (SECURITY_PATCH.empty()) {
-            value = nullptr;
-        } else {
-            value = SECURITY_PATCH.c_str();
-        }
+        value = SECURITY_PATCH;
+        LOGD("[%s] -> %s", name, value);
     }
-
-    if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s] -> %s", name, value);
 
     return callbacks[cookie](cookie, name, value, serial);
 }
@@ -102,41 +90,24 @@ public:
             return;
         }
 
-        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-        path = rawDir;
-        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-
         int fd = api->connectCompanion();
 
-        write(fd, path.data(), path.size());
+        long size;
+        char buffer[1024];
 
-        read(fd, nullptr, 0);
+        while ((size = read(fd, buffer, sizeof(buffer))) > 0) {
+            moduleDex.insert(moduleDex.end(), buffer, buffer + size);
+        }
 
         close(fd);
+
+        LOGD("Received from socket %lu bytes!", moduleDex.size());
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (path.empty()) return;
+        if (moduleDex.empty()) return;
 
-        std::string prop(path + "/cache/pif.json");
-        if (std::filesystem::exists(prop)) {
-            FILE *file = fopen(prop.c_str(), "r");
-            nlohmann::json json = nlohmann::json::parse(file, nullptr, false);
-            fclose(file);
-            LOGD("Read %d props from pif.json", static_cast<int>(json.size()));
-            SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
-            FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
-            json.clear();
-        } else {
-            LOGD("File pif.json doesn't exist, using default values");
-            SECURITY_PATCH = DEF_SECURITY_PATCH;
-            FIRST_API_LEVEL = DEF_FIRST_API_LEVEL;
-        }
-
-        std::string dex(path + "/cache/classes.dex");
-        if (std::filesystem::exists(dex)) {
-            inject();
-        }
+        inject();
 
         doHook();
     }
@@ -148,7 +119,7 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::string path;
+    std::vector<char> moduleDex;
 
     void inject() {
         LOGD("get system classloader");
@@ -158,12 +129,12 @@ private:
         auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
         LOGD("create class loader");
-        auto pathClClass = env->FindClass("dalvik/system/PathClassLoader");
-        auto pathClInit = env->GetMethodID(pathClClass, "<init>",
-                                           "(Ljava/lang/String;Ljava/lang/ClassLoader;)V");
-        std::string dexPath(path + "/cache/classes.dex");
-        auto moduleDex = env->NewStringUTF(dexPath.c_str());
-        auto dexCl = env->NewObject(pathClClass, pathClInit, moduleDex, systemClassLoader);
+        auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
+        auto dexClInit = env->GetMethodID(dexClClass, "<init>",
+                                          "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
+        auto buffer = env->NewDirectByteBuffer(moduleDex.data(),
+                                               static_cast<jlong>(moduleDex.size()));
+        auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
         auto loadClass = env->GetMethodID(clClass, "loadClass",
@@ -173,49 +144,34 @@ private:
 
         auto entryClass = (jclass) entryClassObj;
 
-        LOGD("read props");
-        auto readProps = env->GetStaticMethodID(entryClass, "readProps", "(Ljava/lang/String;)V");
-        std::string prop(path + "/cache/pif.json");
-        auto javaPath = env->NewStringUTF(prop.c_str());
-        env->CallStaticVoidMethod(entryClass, readProps, javaPath);
-
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
 
-        path.clear();
+        moduleDex.clear();
     }
 };
 
 static void companion(int fd) {
-    char buffer[256];
-    long size = read(fd, buffer, sizeof(buffer));
+    FILE *file = fopen("/data/adb/modules/playintegrityfix/classes.dex", "rb");
 
-    std::string path(buffer, size);
-    LOGD("[ROOT] Got GMS dir: %s", path.c_str());
-
-    std::string dex(path + "/cache/classes.dex");
-    std::string prop(path + "/cache/pif.json");
-
-    if (std::filesystem::copy_file(DEX_FILE_PATH, dex,
-                                   std::filesystem::copy_options::overwrite_existing)) {
-        std::filesystem::permissions(dex, std::filesystem::perms::owner_read |
-                                          std::filesystem::perms::group_read |
-                                          std::filesystem::perms::others_read);
+    if (file == nullptr) {
+        write(fd, nullptr, 0);
+        return;
     }
 
-    if (!std::filesystem::exists(PROP_FILE_PATH)) {
-        std::filesystem::remove(prop);
-    }
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
 
-    if (std::filesystem::copy_file(PROP_FILE_PATH, prop,
-                                   std::filesystem::copy_options::overwrite_existing)) {
-        std::filesystem::permissions(prop, std::filesystem::perms::owner_read |
-                                           std::filesystem::perms::group_read |
-                                           std::filesystem::perms::others_read);
-    }
+    std::vector<char> vector(size);
+    fread(vector.data(), 1, size, file);
 
-    write(fd, nullptr, 0);
+    fclose(file);
+
+    write(fd, vector.data(), size);
+
+    vector.clear();
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
