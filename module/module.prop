@@ -1,6 +1,6 @@
 id=playintegrityfix
 name=Play Integrity Fix
-version=v1.1-PROPS
-versionCode=1
+version=v1.2-PROPS
+versionCode=12
 author=chiteroman
 description=Fix CTS profile (SafetyNet) and DEVICE verdict (Play Integrity).
