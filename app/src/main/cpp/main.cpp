@@ -4,14 +4,14 @@
 #include <fstream>
 
 #include "zygisk.hpp"
-#include "dobby.h"
+#include "shadowhook.h"
 #include "json.hpp"
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
-
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
@@ -58,14 +58,39 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
 }
 
 static void doHook() {
-    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
+    void *handle = shadowhook_hook_sym_name(
+            "libc.so",
+            "__system_property_read_callback",
+            reinterpret_cast<void *>(my_system_property_read_callback),
+            reinterpret_cast<void **>(&o_system_property_read_callback)
+    );
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
-    DobbyHook(handle, reinterpret_cast<void *>(my_system_property_read_callback),
-              reinterpret_cast<void **>(&o_system_property_read_callback));
+}
+
+static void sendVector(int fd, const std::vector<char> &vec) {
+    // Send the size of the vector
+    size_t size = vec.size();
+    write(fd, &size, sizeof(size_t));
+
+    // Send the vector data
+    write(fd, vec.data(), size);
+}
+
+static std::vector<char> receiveVector(int fd) {
+    // Receive the size of the vector
+    size_t size;
+    read(fd, &size, sizeof(size_t));
+
+    // Receive the vector data
+    std::vector<char> vec(size);
+    read(fd, vec.data(), size);
+
+    return vec;
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -99,47 +124,32 @@ public:
             return;
         }
 
-        ssize_t size;
-        char buffer[10000];
         int fd = api->connectCompanion();
 
-        size = read(fd, buffer, sizeof(buffer));
-
-        if (size > 0) {
-            moduleDex.insert(moduleDex.end(), buffer, buffer + size);
-        } else {
-            LOGD("Couldn't load classes.dex file in memory");
-            close(fd);
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        lseek(fd, 0, SEEK_SET);
-
-        size = read(fd, buffer, sizeof(buffer));
-
-        if (size > 0) {
-            jsonStr.insert(jsonStr.end(), buffer, buffer + size);
-        } else {
-            LOGD("Couldn't load pif.json file in memory");
-        }
+        dexVector = receiveVector(fd);
+        propVector = receiveVector(fd);
 
         close(fd);
 
-        LOGD("Received 'classes.dex' file from socket: %d bytes",
-             static_cast<int>(moduleDex.size()));
+        LOGD("Read from file descriptor file 'classes.dex' -> %d bytes",
+             static_cast<int>(dexVector.size()));
+        LOGD("Read from file descriptor file 'pif.json' -> %d bytes",
+             static_cast<int>(propVector.size()));
 
-        LOGD("Received 'pif.json' file from socket: %d bytes", static_cast<int>(jsonStr.size()));
+        if (dexVector.empty() || propVector.empty()) api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (moduleDex.empty()) return;
+        if (dexVector.empty() || propVector.empty()) return;
 
         readJson();
 
         inject();
 
         doHook();
+
+        dexVector.clear();
+        propVector.clear();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -149,11 +159,11 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<char> moduleDex;
-    std::string jsonStr;
+    std::vector<char> dexVector, propVector;
 
     void readJson() {
-        nlohmann::json json = nlohmann::json::parse(jsonStr, nullptr, false);
+        std::string data(propVector.cbegin(), propVector.cend());
+        nlohmann::json json = nlohmann::json::parse(data, nullptr, false, true);
 
         auto getStringFromJson = [&json](const std::string &key) {
             return json.contains(key) && !json[key].is_null() ? json[key].get<std::string>()
@@ -162,8 +172,6 @@ private:
 
         SECURITY_PATCH = getStringFromJson("SECURITY_PATCH");
         FIRST_API_LEVEL = getStringFromJson("FIRST_API_LEVEL");
-
-        json.clear();
     }
 
     void inject() {
@@ -177,8 +185,8 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(moduleDex.data(),
-                                               static_cast<jlong>(moduleDex.size()));
+        auto buffer = env->NewDirectByteBuffer(dexVector.data(),
+                                               static_cast<jlong>(dexVector.size()));
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -192,15 +200,13 @@ private:
         LOGD("read json");
         auto readProps = env->GetStaticMethodID(entryClass, "readJson",
                                                 "(Ljava/lang/String;)V");
-        auto javaStr = env->NewStringUTF(jsonStr.c_str());
+        std::string data(propVector.cbegin(), propVector.cend());
+        auto javaStr = env->NewStringUTF(data.c_str());
         env->CallStaticVoidMethod(entryClass, readProps, javaStr);
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
         env->CallStaticVoidMethod(entryClass, entryInit);
-
-        moduleDex.clear();
-        jsonStr.clear();
     }
 };
 
@@ -210,13 +216,17 @@ static void companion(int fd) {
 
     std::vector<char> dexVector((std::istreambuf_iterator<char>(dex)),
                                 std::istreambuf_iterator<char>());
-
     std::vector<char> propVector((std::istreambuf_iterator<char>(prop)),
                                  std::istreambuf_iterator<char>());
 
-    write(fd, dexVector.data(), dexVector.size());
-    lseek(fd, 0, SEEK_SET);
-    write(fd, propVector.data(), propVector.size());
+    dex.close();
+    prop.close();
+
+    sendVector(fd, dexVector);
+    sendVector(fd, propVector);
+
+    dexVector.clear();
+    propVector.clear();
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
