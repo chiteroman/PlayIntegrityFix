@@ -1,7 +1,6 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <stdlib.h>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
@@ -168,13 +167,31 @@ private:
         std::string data(propVector.cbegin(), propVector.cend());
         nlohmann::json json = nlohmann::json::parse(data, nullptr, false, true);
 
-        auto getStringFromJson = [&json](const std::string &key) {
-            return json.contains(key) && !json[key].is_null() ? json[key].get<std::string>()
-                                                              : "NULL";
-        };
+        if (json.contains("SECURITY_PATCH")) {
+            if (json["SECURITY_PATCH"].is_null()) {
+                SECURITY_PATCH = "NULL";
+            } else if (json["SECURITY_PATCH"].is_string()) {
+                SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+            } else {
+                LOGD("Error parsing SECURITY_PATCH!");
+            }
+        } else {
+            LOGD("Key SECURITY_PATCH doesn't exist in JSON file!");
+        }
 
-        SECURITY_PATCH = getStringFromJson("SECURITY_PATCH");
-        FIRST_API_LEVEL = getStringFromJson("FIRST_API_LEVEL");
+        if (json.contains("FIRST_API_LEVEL")) {
+            if (json["FIRST_API_LEVEL"].is_null()) {
+                FIRST_API_LEVEL = "NULL";
+            } else if (json["FIRST_API_LEVEL"].is_string()) {
+                FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
+            } else {
+                LOGD("Error parsing FIRST_API_LEVEL!");
+            }
+        } else {
+            LOGD("Key FIRST_API_LEVEL doesn't exist in JSON file!");
+        }
+
+        json.clear();
     }
 
     void inject() {
@@ -214,18 +231,20 @@ private:
 };
 
 static void companion(int fd) {
-    FILE *dex = fopen(DEX_FILE_PATH, "rb");
     long dexSize = 0;
     char *dexBuffer = nullptr;
+
     long jsonSize = 0;
     char *jsonBuffer = nullptr;
+
+    FILE *dex = fopen(DEX_FILE_PATH, "rb");
 
     if (dex) {
         fseek(dex, 0, SEEK_END);
         dexSize = ftell(dex);
         fseek(dex, 0, SEEK_SET);
 
-        dexBuffer = (char*)calloc(1, dexSize);
+        dexBuffer = static_cast<char *>(calloc(1, dexSize));
         fread(dexBuffer, 1, dexSize, dex);
 
         fclose(dex);
@@ -238,7 +257,7 @@ static void companion(int fd) {
         jsonSize = ftell(json);
         fseek(json, 0, SEEK_SET);
 
-        jsonBuffer = (char*)calloc(1, jsonSize);
+        jsonBuffer = static_cast<char *>(calloc(1, jsonSize));
         fread(jsonBuffer, 1, jsonSize, json);
 
         fclose(json);
@@ -253,7 +272,6 @@ static void companion(int fd) {
     free(dexBuffer);
     free(jsonBuffer);
 }
-
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
 
