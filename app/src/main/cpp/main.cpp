@@ -244,9 +244,6 @@ static void companion(int fd) {
         fclose(json);
     }
 
-    dexBuffer[dexSize] = 0;
-    jsonBuffer[jsonSize] = 0;
-
     write(fd, &dexSize, sizeof(long));
     write(fd, dexBuffer, dexSize);
 
