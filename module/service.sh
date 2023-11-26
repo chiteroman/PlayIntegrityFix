@@ -2,7 +2,11 @@
 
 RESETPROP="${0%/*}/resetprop"
 
-chmod 755 $RESETPROP
+if [ -x "$RESETPROP" ]; then
+	chmod 755 $RESETPROP
+else
+	RESETPROP="resetprop"
+fi
 
 check_resetprop() {
   local NAME=$1

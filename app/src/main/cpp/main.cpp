@@ -1,7 +1,6 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <fstream>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
@@ -11,7 +10,7 @@
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define PROP_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
+#define JSON_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
@@ -72,27 +71,6 @@ static void doHook() {
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
 }
 
-static void sendVector(int fd, const std::vector<char> &vec) {
-    // Send the size of the vector
-    size_t size = vec.size();
-    write(fd, &size, sizeof(size_t));
-
-    // Send the vector data
-    write(fd, vec.data(), size);
-}
-
-static std::vector<char> receiveVector(int fd) {
-    // Receive the size of the vector
-    size_t size;
-    read(fd, &size, sizeof(size_t));
-
-    // Receive the vector data
-    std::vector<char> vec(size);
-    read(fd, vec.data(), size);
-
-    return vec;
-}
-
 class PlayIntegrityFix : public zygisk::ModuleBase {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
@@ -124,10 +102,36 @@ public:
             return;
         }
 
+        long size = 0;
         int fd = api->connectCompanion();
 
-        dexVector = receiveVector(fd);
-        propVector = receiveVector(fd);
+        read(fd, &size, sizeof(long));
+
+        if (size < 1) {
+            close(fd);
+            LOGD("Couldn't read from file descriptor 'classes.dex' file!");
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        dexVector.resize(size);
+
+        read(fd, dexVector.data(), size);
+
+        size = 0;
+
+        read(fd, &size, sizeof(long));
+
+        if (size < 1) {
+            close(fd);
+            LOGD("Couldn't read from file descriptor 'pif.json' file!");
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        propVector.resize(size);
+
+        read(fd, propVector.data(), size);
 
         close(fd);
 
@@ -135,8 +139,6 @@ public:
              static_cast<int>(dexVector.size()));
         LOGD("Read from file descriptor file 'pif.json' -> %d bytes",
              static_cast<int>(propVector.size()));
-
-        if (dexVector.empty() || propVector.empty()) api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
@@ -211,23 +213,38 @@ private:
 };
 
 static void companion(int fd) {
-    std::ifstream dex(DEX_FILE_PATH, std::ios::binary);
-    std::ifstream prop(PROP_FILE_PATH);
+    FILE *dex = fopen(DEX_FILE_PATH, "rb");
 
-    std::vector<char> dexVector((std::istreambuf_iterator<char>(dex)),
-                                std::istreambuf_iterator<char>());
-    std::vector<char> propVector((std::istreambuf_iterator<char>(prop)),
-                                 std::istreambuf_iterator<char>());
+    fseek(dex, 0, SEEK_END);
+    long dexSize = ftell(dex);
+    fseek(dex, 0, SEEK_SET);
 
-    dex.close();
-    prop.close();
+    char dexBuffer[dexSize];
+    fread(dexBuffer, 1, dexSize, dex);
 
-    sendVector(fd, dexVector);
-    sendVector(fd, propVector);
+    fclose(dex);
 
-    dexVector.clear();
-    propVector.clear();
+    FILE *json = fopen(JSON_FILE_PATH, "r");
+
+    fseek(json, 0, SEEK_END);
+    long jsonSize = ftell(json);
+    fseek(json, 0, SEEK_SET);
+
+    char jsonBuffer[jsonSize];
+    fread(jsonBuffer, 1, jsonSize, json);
+
+    fclose(json);
+
+    dexBuffer[dexSize] = 0;
+    jsonBuffer[jsonSize] = 0;
+
+    write(fd, &dexSize, sizeof(long));
+    write(fd, dexBuffer, dexSize);
+
+    write(fd, &jsonSize, sizeof(long));
+    write(fd, jsonBuffer, jsonSize);
 }
+
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
 
