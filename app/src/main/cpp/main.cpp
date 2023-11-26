@@ -1,6 +1,7 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
@@ -214,35 +215,43 @@ private:
 
 static void companion(int fd) {
     FILE *dex = fopen(DEX_FILE_PATH, "rb");
+    long dexSize = 0;
+    char *dexBuffer = nullptr;
+    long jsonSize = 0;
+    char *jsonBuffer = nullptr;
 
-    fseek(dex, 0, SEEK_END);
-    long dexSize = ftell(dex);
-    fseek(dex, 0, SEEK_SET);
+    if (dex) {
+        fseek(dex, 0, SEEK_END);
+        dexSize = ftell(dex);
+        fseek(dex, 0, SEEK_SET);
 
-    char dexBuffer[dexSize];
-    fread(dexBuffer, 1, dexSize, dex);
+        dexBuffer = (char*)calloc(1, dexSize);
+        fread(dexBuffer, 1, dexSize, dex);
 
-    fclose(dex);
+        fclose(dex);
+    }
 
     FILE *json = fopen(JSON_FILE_PATH, "r");
 
-    fseek(json, 0, SEEK_END);
-    long jsonSize = ftell(json);
-    fseek(json, 0, SEEK_SET);
+    if (json) {
+        fseek(json, 0, SEEK_END);
+        jsonSize = ftell(json);
+        fseek(json, 0, SEEK_SET);
 
-    char jsonBuffer[jsonSize];
-    fread(jsonBuffer, 1, jsonSize, json);
+        jsonBuffer = (char*)calloc(1, jsonSize);
+        fread(jsonBuffer, 1, jsonSize, json);
 
-    fclose(json);
-
-    dexBuffer[dexSize] = 0;
-    jsonBuffer[jsonSize] = 0;
+        fclose(json);
+    }
 
     write(fd, &dexSize, sizeof(long));
     write(fd, dexBuffer, dexSize);
 
     write(fd, &jsonSize, sizeof(long));
     write(fd, jsonBuffer, jsonSize);
+
+    free(dexBuffer);
+    free(jsonBuffer);
 }
 
 
