@@ -27,14 +27,14 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        if (FIRST_API_LEVEL == "NULL") {
+        if (FIRST_API_LEVEL == "nullptr") {
             value = nullptr;
         } else {
             value = FIRST_API_LEVEL.c_str();
         }
         LOGD("[%s] -> %s", name, value);
     } else if (prop.ends_with("security_patch")) {
-        if (SECURITY_PATCH == "NULL") {
+        if (SECURITY_PATCH == "nullptr") {
             value = nullptr;
         } else {
             value = SECURITY_PATCH.c_str();
@@ -169,7 +169,7 @@ private:
 
         if (json.contains("SECURITY_PATCH")) {
             if (json["SECURITY_PATCH"].is_null()) {
-                SECURITY_PATCH = "NULL";
+                SECURITY_PATCH = "nullptr";
             } else if (json["SECURITY_PATCH"].is_string()) {
                 SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
             } else {
@@ -181,7 +181,7 @@ private:
 
         if (json.contains("FIRST_API_LEVEL")) {
             if (json["FIRST_API_LEVEL"].is_null()) {
-                FIRST_API_LEVEL = "NULL";
+                FIRST_API_LEVEL = "nullptr";
             } else if (json["FIRST_API_LEVEL"].is_string()) {
                 FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
             } else {

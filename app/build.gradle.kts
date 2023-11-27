@@ -44,7 +44,7 @@ android {
     }
 }
 
-afterEvaluate {
+tasks.register("copyFiles") {
     val moduleFolder = project.rootDir.resolve("module")
     val dexFile = project.buildDir.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
     val soDir = project.buildDir.resolve("intermediates/stripped_native_libs/release/out/lib")
@@ -56,13 +56,17 @@ afterEvaluate {
         val destination = moduleFolder.resolve("zygisk/$abiFolder.so")
         soFile.copyTo(destination, overwrite = true)
     }
-
-    tasks["assembleRelease"].dependsOn("module")
 }
 
-tasks.register<Zip>("module") {
+tasks.register<Zip>("zip") {
     archiveFileName.set("PlayIntegrityFix.zip")
     destinationDirectory.set(project.rootDir.resolve("out"))
 
     from(project.rootDir.resolve("module"))
+}
+
+afterEvaluate {
+    tasks.named("assembleRelease") {
+        dependsOn("copyFiles", "zip")
+    }
 }

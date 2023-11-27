@@ -2,15 +2,10 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v13.7
+# v13.8
 
-- Removed custom resetprop.
-- Removed custom props spoof.
-- Removed weird code.
+Google banned old fingerprints :(
 
-If you want an undetectable resetprop, use Kitsune Magisk.
-If you want to spoof your own props, modify the props in source code and build by yourself.
-Or you can use unstable build, you can download in GitHub repo.
-Should work and don't crash nothing.
+This build has hardcoded the fix into Zygisk native libs like v13.0.
 
-I recommend to clear GMS data and cache before reboot.
+You can't use pif.json or pif.prop files to spoof custom props.
