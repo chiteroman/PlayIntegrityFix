@@ -28,11 +28,6 @@ It injects a classes.dex file to modify few fields in android.os.Build class. Al
 it creates a hook to modify system properties.
 The purpose of the module is to avoid a hardware attestation.
 
-## About 'pif.json' file
-
-You can modify this file to spoof android.os.Build fields in GMS unstable process and try to pass Device verdict.
-You can't use values from recent devices due this devices must use a hardware attestation.
-
 ## Failing BASIC verdict
 
 If you are failing basicIntegrity (SafetyNet) or MEETS_BASIC_INTEGRITY (Play Integrity) something is

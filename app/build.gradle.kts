@@ -43,32 +43,3 @@ android {
         }
     }
 }
-
-tasks.register("copyFiles") {
-    doLast {
-        val moduleFolder = project.rootDir.resolve("module")
-        val dexFile = project.buildDir.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
-        val soDir = project.buildDir.resolve("intermediates/stripped_native_libs/release/out/lib")
-
-        dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
-
-        soDir.walk().filter { it.isFile && it.extension == "so" }.forEach { soFile ->
-            val abiFolder = soFile.parentFile.name
-            val destination = moduleFolder.resolve("zygisk/$abiFolder.so")
-            soFile.copyTo(destination, overwrite = true)
-        }
-    }
-}
-
-tasks.register<Zip>("zip") {
-    dependsOn("copyFiles")
-
-    archiveFileName.set("PlayIntegrityFix.zip")
-    destinationDirectory.set(project.rootDir.resolve("out"))
-
-    from(project.rootDir.resolve("module"))
-}
-
-afterEvaluate {
-    tasks["assembleRelease"].finalizedBy("copyFiles", "zip")
-}
