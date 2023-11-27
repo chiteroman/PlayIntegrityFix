@@ -1,0 +1,7 @@
+id=playintegrityfix
+name=Play Integrity Fix
+version=v13.8
+versionCode=138
+author=chiteroman
+description=Fix CTS profile (SafetyNet) and DEVICE verdict (Play Integrity).
+updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json
