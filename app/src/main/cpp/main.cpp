@@ -13,6 +13,8 @@
 
 #define JSON_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
 
+#define MAX_FIRST_API_LEVEL 32
+
 static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
@@ -26,21 +28,32 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         return;
 
     std::string_view prop(name);
-
+    std::string default_value = value;
     if (prop.ends_with("api_level")) {
-        if (FIRST_API_LEVEL == "nullptr") {
-            value = nullptr;
+        if (FIRST_API_LEVEL == "nullptr" || FIRST_API_LEVEL == "") {
+            //value = nullptr;
+            LOGD("First Api level is defined as null");
+            if (std::stoi(value) > MAX_FIRST_API_LEVEL) {
+                LOGD("Default %s is over %d. Defaulting to %d", name,MAX_FIRST_API_LEVEL, MAX_FIRST_API_LEVEL);
+                value = "32";
+            }
         } else {
             value = FIRST_API_LEVEL.c_str();
         }
-        LOGD("[%s] -> %s", name, value);
+        if (default_value != value) {
+            LOGD("[%s] %s -> %s", name, default_value.c_str(), value);
+        }
     } else if (prop.ends_with("security_patch")) {
-        if (SECURITY_PATCH == "nullptr") {
-            value = nullptr;
+        if (SECURITY_PATCH == "nullptr" || SECURITY_PATCH == "") {
+            //value = nullptr;
+            LOGD("Security patch is defined as null");
         } else {
             value = SECURITY_PATCH.c_str();
         }
-        LOGD("[%s] -> %s", name, value);
+        if (default_value != value) {
+            LOGD("[%s] %s -> %s", name, default_value.c_str(), value);
+        }
+
     }
 
     return callbacks[cookie](cookie, name, value, serial);
