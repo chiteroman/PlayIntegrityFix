@@ -45,20 +45,24 @@ android {
 }
 
 tasks.register("copyFiles") {
-    val moduleFolder = project.rootDir.resolve("module")
-    val dexFile = project.buildDir.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
-    val soDir = project.buildDir.resolve("intermediates/stripped_native_libs/release/out/lib")
+    doLast {
+        val moduleFolder = project.rootDir.resolve("module")
+        val dexFile = project.buildDir.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
+        val soDir = project.buildDir.resolve("intermediates/stripped_native_libs/release/out/lib")
 
-    dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
+        dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 
-    soDir.walk().filter { it.isFile && it.extension == "so" }.forEach { soFile ->
-        val abiFolder = soFile.parentFile.name
-        val destination = moduleFolder.resolve("zygisk/$abiFolder.so")
-        soFile.copyTo(destination, overwrite = true)
+        soDir.walk().filter { it.isFile && it.extension == "so" }.forEach { soFile ->
+            val abiFolder = soFile.parentFile.name
+            val destination = moduleFolder.resolve("zygisk/$abiFolder.so")
+            soFile.copyTo(destination, overwrite = true)
+        }
     }
 }
 
 tasks.register<Zip>("zip") {
+    dependsOn("copyFiles")
+
     archiveFileName.set("PlayIntegrityFix.zip")
     destinationDirectory.set(project.rootDir.resolve("out"))
 
@@ -66,7 +70,5 @@ tasks.register<Zip>("zip") {
 }
 
 afterEvaluate {
-    tasks.named("assembleRelease") {
-        dependsOn("copyFiles", "zip")
-    }
+    tasks["assembleRelease"].finalizedBy("copyFiles", "zip")
 }
