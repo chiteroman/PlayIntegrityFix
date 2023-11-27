@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+/module/classes.dex
+/module/zygisk/*
+/out/*
