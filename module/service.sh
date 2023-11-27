@@ -2,7 +2,7 @@
 
 RESETPROP="${0%/*}/resetprop"
 
-if [ -x "$RESETPROP" ]; then
+if [ -e "$RESETPROP" ]; then
 	chmod 755 $RESETPROP
 else
 	RESETPROP="resetprop"
@@ -32,7 +32,7 @@ maybe_set_prop vendor.boot.mode recovery unknown
 
 # Hiding SELinux | Permissive status
 if [ -n "$(getprop ro.build.selinux)" ]; then
-	resetprop --delete ro.build.selinux
+	$RESETPROP --delete ro.build.selinux
 fi
 
 # Hiding SELinux | Use toybox to protect *stat* access time reading
