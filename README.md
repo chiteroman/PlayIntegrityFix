@@ -1,9 +1,8 @@
 # Play Integrity Fix
 
-A Zygisk module which fix "ctsProfileMatch" (SafetyNet) and "MEETS_DEVICE_INTEGRITY" (Play
-Integrity).
+A Zygisk module which fixes "ctsProfileMatch" (SafetyNet) and "MEETS_DEVICE_INTEGRITY" (Play Integrity).
 
-To use this module you must have one of this:
+To use this module you must have one of the following:
 
 - Magisk with Zygisk enabled.
 - KernelSU with [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) module installed.
@@ -24,41 +23,35 @@ https://t.me/playintegrityfix
 
 ## About module
 
-It injects a classes.dex file to modify few fields in android.os.Build class. Also, in native code
-it creates a hook to modify system properties.
+It injects a classes.dex file to modify a few fields in the android.os.Build class. Also, it creates a hook in the native code to modify system properties. These are spoofed only to Google Play Services' DroidGuard (SafetyNet/Play Integrity) service.
+
 The purpose of the module is to avoid a hardware attestation.
-
-## Failing BASIC verdict
-
-If you are failing basicIntegrity (SafetyNet) or MEETS_BASIC_INTEGRITY (Play Integrity) something is
-wrong in your setup. My recommended steps in order to find the problem:
-
-- Disable all modules except mine.
-- Check your SELinux (must be enforced).
-
-Some modules which modify system can trigger DroidGuard detection, never hook GMS processes.
-
-## Certify Play Store and fix Google Wallet
-
-Follow this steps:
-
-- Flash my module in Magisk/KernelSU (if you already have my module, just ignore this step).
-- Clear Google Wallet cache (if you have it).
-- Clear Google Play Store cache and data.
-- Clear Google Play Services (com.google.android.gms) cache and data (Optionally skip clearing data and wait some time, ~24h, for it to resolve on its own).
-- Reboot
 
 ## Troubleshooting
 
-### Fails to meet device integrity (KernelSU)
+### Failing BASIC verdict
+
+If you are failing basicIntegrity (SafetyNet) or MEETS_BASIC_INTEGRITY (Play Integrity) something is wrong in your setup. Recommended steps in order to find the problem:
+
+- Disable all modules except this one
+
+Some modules which modify system can trigger DroidGuard detection, never hook GMS processes.
+
+### Failing DEVICE verdict (on KernelSU)
 
 - Disable ZygiskNext
 - Reboot
 - Enable ZygiskNext
 
-### Passes device integrity, but fails in Wallet (even after clearing cache)
+### Play Protect/Store Certification and Google Wallet Tap To Pay Setup Security Requirements
 
-- Remove all data from Google Play Services
+Follow these steps:
+
+- Flash the module in Magisk/KernelSU
+- Clear Google Wallet cache (if you have it)
+- Clear Google Play Store cache and data
+- Clear Google Play Services (com.google.android.gms) cache and data (Optionally skip clearing data and wait some time, ~24h, for it to resolve on its own)
+- Reboot
 
 <details>
 <summary>Guide</summary>
@@ -68,9 +61,9 @@ Follow this steps:
 
 </details>
 
-## Read module logs
+### Read module logs
 
-You can read module logs using this command:
+You can read module logs using this command directly after boot:
 
 ```
 adb shell "logcat | grep 'PIF'"
