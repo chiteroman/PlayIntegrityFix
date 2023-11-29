@@ -3,7 +3,7 @@ if magisk --denylist status; then
     magisk --denylist rm com.google.android.gms
 fi
 
-# Remove safetynet-fix module if installed
+# Remove conflicting modules if installed
 if [ -d /data/adb/modules/safetynet-fix ]; then
     touch /data/adb/modules/safetynet-fix/remove
 fi
