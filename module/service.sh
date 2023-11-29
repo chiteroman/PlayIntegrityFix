@@ -38,7 +38,10 @@ resetprop_if_match ro.boot.mode recovery unknown
 resetprop_if_match vendor.boot.mode recovery unknown
 
 # SELinux
-resetprop --delete ro.build.selinux
+if [ -n "$(getprop ro.build.selinux)" ]; then
+	resetprop --delete ro.build.selinux
+fi
+
 # use toybox to protect *stat* access time reading
 if [ "$(toybox cat /sys/fs/selinux/enforce)" == "0" ]; then
     chmod 640 /sys/fs/selinux/enforce

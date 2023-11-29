@@ -11,13 +11,13 @@ import java.security.Provider;
 import java.security.Security;
 
 public final class EntryPoint {
-    private static final String PRODUCT = "sailfish";
-    private static final String DEVICE = "sailfish";
-    private static final String MANUFACTURER = "Google";
-    private static final String BRAND = "google";
-    private static final String MODEL = "Pixel";
-    private static final String FINGERPRINT = "google/sailfish/sailfish:8.1.0/OPM4.171019.021.P1/4820305:user/release-keys";
-    private static final String SECURITY_PATCH = "2018-07-05";
+    private static final String PRODUCT = "foster_e";
+    private static final String DEVICE = "foster";
+    private static final String MANUFACTURER = "NVIDIA";
+    private static final String BRAND = "NVIDIA";
+    private static final String MODEL = "SHIELD Android TV";
+    private static final String FINGERPRINT = "NVIDIA/foster_e/foster:7.0/NRD90M/2427173_1038.2788:user/release-keys";
+    private static final String SECURITY_PATCH = "2018-01-05";
 
     public static void init() {
         spoofProvider();

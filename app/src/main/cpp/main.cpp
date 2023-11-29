@@ -1,17 +1,17 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
-#include <map>
+#include <unistd.h>
 #include <string_view>
+#include <map>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
-#include "classes_dex.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-#define FIRST_API_LEVEL "25"
+#define FIRST_API_LEVEL "23"
 
-#define SECURITY_PATCH "2018-07-05"
+#define SECURITY_PATCH "2018-01-05"
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -70,28 +70,53 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        bool isGms = false, isGmsUnstable = false;
+
         auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        std::string_view process(rawProcess);
+        if (rawProcess) {
+            std::string_view process(rawProcess);
 
-        bool isGms = process.starts_with("com.google.android.gms");
-        isGmsUnstable = process.compare("com.google.android.gms.unstable") == 0;
+            isGms = process.starts_with("com.google.android.gms");
+            isGmsUnstable = process.compare("com.google.android.gms.unstable") == 0;
+        }
 
         env->ReleaseStringUTFChars(args->nice_name, rawProcess);
 
         if (isGms) api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (isGmsUnstable) return;
+        if (isGmsUnstable) {
+            long size = 0;
+            int fd = api->connectCompanion();
+
+            read(fd, &size, sizeof(long));
+
+            if (size > 0) {
+                vector.resize(size);
+                read(fd, vector.data(), size);
+                LOGD("Read %ld bytes from fd!", size);
+            } else {
+                LOGD("Couldn't read classes.dex from fd!");
+                api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+                return;
+            }
+
+            close(fd);
+
+            return;
+        }
 
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (!isGmsUnstable) return;
+        if (vector.empty()) return;
 
         doHook();
 
         inject();
+
+        vector.clear();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -101,7 +126,7 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    bool isGmsUnstable = false;
+    std::vector<char> vector;
 
     void inject() {
         LOGD("get system classloader");
@@ -114,7 +139,7 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(classes_dex, classes_dex_len);
+        auto buffer = env->NewDirectByteBuffer(vector.data(), static_cast<jlong>(vector.size()));
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -131,4 +156,27 @@ private:
     }
 };
 
+static void companion(int fd) {
+    long size = 0;
+    std::vector<char> vector;
+
+    FILE *file = fopen("/data/adb/modules/playintegrityfix/classes.dex", "rb");
+
+    if (file) {
+        fseek(file, 0, SEEK_END);
+        size = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        vector.resize(size);
+        fread(vector.data(), 1, size, file);
+
+        fclose(file);
+    }
+
+    write(fd, &size, sizeof(long));
+    write(fd, vector.data(), size);
+}
+
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
+
+REGISTER_ZYGISK_COMPANION(companion)
