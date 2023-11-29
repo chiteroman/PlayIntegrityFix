@@ -1,4 +1,5 @@
 #include <android/log.h>
+#include <sys/stat.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
 
@@ -11,6 +12,7 @@
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define JSON_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
+#define CUSTOM_JSON_FILE_PATH "/data/adb/modules/playintegrityfix/custom.pif.json"
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
@@ -247,7 +249,12 @@ static void companion(int fd) {
         fclose(dex);
     }
 
-    FILE *json = fopen(JSON_FILE_PATH, "r");
+    struct stat tmpbuf;
+    if (stat(CUSTOM_JSON_FILE_PATH, &tmpbuf) == 0) {
+       FILE *json = fopen(CUSTOM_JSON_FILE_PATH, "r");
+    else {
+       FILE *json = fopen(JSON_FILE_PATH, "r");
+    }
 
     if (json) {
         fseek(json, 0, SEEK_END);
