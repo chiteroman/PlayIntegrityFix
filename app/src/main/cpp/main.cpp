@@ -96,6 +96,7 @@ public:
                 read(fd, vector.data(), size);
                 LOGD("Read %ld bytes from fd!", size);
             } else {
+                close(fd);
                 LOGD("Couldn't read classes.dex from fd!");
                 api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
                 return;
@@ -175,6 +176,8 @@ static void companion(int fd) {
 
     write(fd, &size, sizeof(long));
     write(fd, vector.data(), size);
+
+    vector.clear();
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
