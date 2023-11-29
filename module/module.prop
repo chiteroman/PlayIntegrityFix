@@ -1,7 +1,7 @@
 id=playintegrityfix
 name=Play Integrity Fix
 version=PROPS-v2.1
-versionCode=2001
+versionCode=2101
 author=chiteroman
 description=Fix CTS profile (SafetyNet) and DEVICE verdict (Play Integrity).
-updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json
+updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/custom/update.json
