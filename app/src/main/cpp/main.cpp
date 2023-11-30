@@ -3,50 +3,37 @@
 #include <unistd.h>
 
 #include "zygisk.hpp"
-#include "shadowhook.h"
+#include "dobby.h"
 #include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
 #define DEX_FILE_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define JSON_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
+#define JSON_FILE_PATH "/data/adb/pif.json"
 
-#define CUSTOM_JSON_FILE_PATH "/data/adb/modules/playintegrityfix/custom.pif.json"
-
-static std::string FIRST_API_LEVEL, SECURITY_PATCH;
+static std::string FIRST_API_LEVEL;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
+static volatile T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr ||
-        !callbacks.contains(cookie))
-        return;
+    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
-    std::string_view prop(name);
-
-    if (prop.ends_with("api_level")) {
+    if (strcmp(name, "ro.product.first_api_level") == 0) {
         if (FIRST_API_LEVEL.empty()) {
-            LOGD("FIRST_API_LEVEL is empty, ignoring it...");
-        } else if (FIRST_API_LEVEL == "nullptr") {
-            value = nullptr;
+            LOGD("[ro.product.first_api_level]: %s -> 23", value);
+            return o_callback(cookie, name, "23", serial);
         } else {
-            value = FIRST_API_LEVEL.c_str();
+            const char *newValue = FIRST_API_LEVEL.c_str();
+            LOGD("[ro.product.first_api_level]: %s -> %s", value, newValue);
+            return o_callback(cookie, name, newValue, serial);
         }
-        LOGD("[%s] -> %s", name, value);
-    } else if (prop.ends_with("security_patch")) {
-        if (SECURITY_PATCH.empty()) {
-            LOGD("SECURITY_PATCH is empty, ignoring it...");
-        } else {
-            value = SECURITY_PATCH.c_str();
-        }
-        LOGD("[%s] -> %s", name, value);
     }
 
-    return callbacks[cookie](cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -56,23 +43,19 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    callbacks[cookie] = callback;
+    o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
-    void *handle = shadowhook_hook_sym_name(
-            "libc.so",
-            "__system_property_read_callback",
-            reinterpret_cast<void *>(my_system_property_read_callback),
-            reinterpret_cast<void **>(&o_system_property_read_callback)
-    );
+    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
+    DobbyHook(handle, (void *) my_system_property_read_callback,
+              (void **) &o_system_property_read_callback);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -85,16 +68,14 @@ public:
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
         bool isGms = false, isGmsUnstable = false;
 
-        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+        auto process = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        if (rawProcess) {
-            std::string_view process(rawProcess);
-
-            isGms = process.starts_with("com.google.android.gms");
-            isGmsUnstable = process.compare("com.google.android.gms.unstable") == 0;
+        if (process) {
+            isGms = strncmp(process, "com.google.android.gms", 22) == 0;
+            isGmsUnstable = strcmp(process, "com.google.android.gms.unstable") == 0;
         }
 
-        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
+        env->ReleaseStringUTFChars(args->nice_name, process);
 
         if (!isGms) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
@@ -170,22 +151,11 @@ private:
     nlohmann::json json;
 
     void readJson() {
-        if (json.contains("SECURITY_PATCH")) {
-            if (json["SECURITY_PATCH"].is_null()) {
-                LOGD("Key SECURITY_PATCH is null!");
-            } else if (json["SECURITY_PATCH"].is_string()) {
-                SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
-            } else {
-                LOGD("Error parsing SECURITY_PATCH!");
-            }
-        } else {
-            LOGD("Key SECURITY_PATCH doesn't exist in JSON file!");
-        }
+        LOGD("JSON contains %d keys!", static_cast<int>(json.size()));
 
         if (json.contains("FIRST_API_LEVEL")) {
             if (json["FIRST_API_LEVEL"].is_null()) {
                 LOGD("Key FIRST_API_LEVEL is null!");
-                FIRST_API_LEVEL = "nullptr";
             } else if (json["FIRST_API_LEVEL"].is_string()) {
                 FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
             } else {
@@ -220,15 +190,10 @@ private:
 
         auto entryClass = (jclass) entryClassObj;
 
-        LOGD("read json");
-        auto readProps = env->GetStaticMethodID(entryClass, "readJson",
-                                                "(Ljava/lang/String;)V");
-        auto javaStr = env->NewStringUTF(json.dump().c_str());
-        env->CallStaticVoidMethod(entryClass, readProps, javaStr);
-
         LOGD("call init");
-        auto entryInit = env->GetStaticMethodID(entryClass, "init", "()V");
-        env->CallStaticVoidMethod(entryClass, entryInit);
+        auto entryInit = env->GetStaticMethodID(entryClass, "init", "(Ljava/lang/String;)V");
+        auto javaStr = env->NewStringUTF(json.dump().c_str());
+        env->CallStaticVoidMethod(entryClass, entryInit, javaStr);
     }
 };
 
@@ -249,9 +214,7 @@ static void companion(int fd) {
         fclose(dex);
     }
 
-    FILE *json = fopen(CUSTOM_JSON_FILE_PATH, "r");
-    if (!json)
-       FILE *json = fopen(JSON_FILE_PATH, "r");
+    FILE *json = fopen(JSON_FILE_PATH, "r");
 
     if (json) {
         fseek(json, 0, SEEK_END);

@@ -6,7 +6,7 @@ fi
 # Copy default pif.json if it doesn't exist.
 if [ ! -e /data/adb/pif.json ]; then
 	mv -f $MODPATH/pif.json /data/adb/pif.json
-	ui_print "Moved default pif.json file!"
+	ui_print "- Moved default pif.json file!"
 fi
 
 # SafetyNet-Fix module is obsolete and it's incompatible with PIF.
@@ -17,5 +17,10 @@ fi
 
 # MagiskHidePropsConf module is obsolete in Android 8+ but it shouldn't give issues.
 if [ -d /data/adb/modules/MagiskHidePropsConf ]; then
-    ui_print "!!! WARNING, 'MagiskHidePropsConf' module may cause issues with PIF"
+    ui_print "!!! WARNING, MagiskHidePropsConf module may cause issues with PIF"
 fi
+
+# use our resetprop
+mv -f $MODPATH/bin/$ABI/resetprop $MODPATH
+rm -rf $MODPATH/bin
+set_perm $MODPATH/resetprop root root 755

@@ -18,12 +18,7 @@ import java.util.Map;
 public final class EntryPoint {
     private static final Map<String, String> map = new HashMap<>();
 
-    public static void init() {
-        spoofProvider();
-        spoofDevice();
-    }
-
-    public static void readJson(String data) {
+    public static void init(String data) {
         try (JsonReader reader = new JsonReader(new StringReader(data))) {
             reader.beginObject();
             while (reader.hasNext()) {
@@ -32,7 +27,10 @@ public final class EntryPoint {
             reader.endObject();
         } catch (IOException e) {
             LOG("Couldn't read JSON from Zygisk: " + e);
+            return;
         }
+        spoofProvider();
+        spoofDevice();
     }
 
     private static void spoofProvider() {
@@ -63,8 +61,6 @@ public final class EntryPoint {
     }
 
     static void spoofDevice() {
-        if (map.isEmpty()) return;
-
         setProp("PRODUCT", map.get("PRODUCT"));
         setProp("DEVICE", map.get("DEVICE"));
         setProp("MANUFACTURER", map.get("MANUFACTURER"));

@@ -13,7 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
-/module/classes.dex
-/module/pif.json
 /module/zygisk/*
-/out/*
+/module_resetprop/zygisk/*
+*.dex
+*.zip

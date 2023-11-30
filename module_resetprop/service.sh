@@ -1,11 +1,13 @@
 # Conditional sensitive properties
 
+RESETPROP="${0%/*}/resetprop"
+
 resetprop_if_diff() {
     local NAME=$1
     local EXPECTED=$2
     local CURRENT=$(resetprop $NAME)
 
-    [ -z "$CURRENT" ] || [ "$CURRENT" == "$EXPECTED" ] || resetprop $NAME $EXPECTED
+    [ -z "$CURRENT" ] || [ "$CURRENT" == "$EXPECTED" ] || $RESETPROP -n $NAME $EXPECTED
 }
 
 resetprop_if_match() {
@@ -13,7 +15,7 @@ resetprop_if_match() {
     local CONTAINS=$2
     local VALUE=$3
 
-    [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && resetprop $NAME $VALUE
+    [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && $RESETPROP -n $NAME $VALUE
 }
 
 # Magisk recovery mode
@@ -23,7 +25,7 @@ resetprop_if_match vendor.boot.mode recovery unknown
 
 # SELinux
 if [ -n "$(resetprop ro.build.selinux)" ]; then
-    resetprop --delete ro.build.selinux
+    $RESETPROP --delete ro.build.selinux
 fi
 
 # use toybox to protect *stat* access time reading

@@ -8,6 +8,8 @@ if [ -d /data/adb/modules/safetynet-fix ]; then
     touch /data/adb/modules/safetynet-fix/remove
 fi
 
+RESETPROP="${0%/*}/resetprop"
+
 # Conditional early sensitive properties
 
 resetprop_if_diff() {
@@ -15,7 +17,7 @@ resetprop_if_diff() {
     local EXPECTED=$2
     local CURRENT=$(resetprop $NAME)
 
-    [ -z "$CURRENT" ] || [ "$CURRENT" == "$EXPECTED" ] || resetprop $NAME $EXPECTED
+    [ -z "$CURRENT" ] || [ "$CURRENT" == "$EXPECTED" ] || $RESETPROP -n $NAME $EXPECTED
 }
 
 resetprop_if_match() {
@@ -23,7 +25,7 @@ resetprop_if_match() {
     local CONTAINS=$2
     local VALUE=$3
 
-    [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && resetprop $NAME $VALUE
+    [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && $RESETPROP -n $NAME $VALUE
 }
 
 # RootBeer, Microsoft
