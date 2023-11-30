@@ -3,10 +3,13 @@ if [ "$API" -lt 26 ]; then
     abort "!!! You can't use this module on Android < 8.0"
 fi
 
-# Remove safetynet-fix module if installed
+# Remove/warn if conflicting modules are installed
 if [ -d /data/adb/modules/safetynet-fix ]; then
     touch /data/adb/modules/safetynet-fix/remove
     ui_print "- 'safetynet-fix' module will be removed on next reboot"
+fi
+if [ -d /data/adb/modules/MagiskHidePropsConf ]; then
+    ui_print "- Warning, 'MagiskHidePropsConf' module may cause issues with PIF"
 fi
 
 # Clean up any leftover files from previous deprecated methods
