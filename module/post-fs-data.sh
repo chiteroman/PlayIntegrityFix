@@ -4,11 +4,9 @@ if magisk --denylist status; then
 fi
 
 # Remove conflicting modules if installed
-for i in MagiskHidePropsConf safetynet-fix; do
-    if [ -d /data/adb/modules/$i ]; then
-        touch /data/adb/modules/$i/remove
-    fi
-done
+if [ -d /data/adb/modules/safetynet-fix ]; then
+    touch /data/adb/modules/safetynet-fix/remove
+fi
 
 # Conditional early sensitive properties
 
