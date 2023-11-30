@@ -2,10 +2,12 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v13.8
+# CUSTOM SPOOF v2.1
 
-Google banned old fingerprints :(
+DO NOT USE THIS BUILD IF YOU AREN'T A DEVELOPER, ALWAYS USE LATEST STABLE.
+THIS BUILD IS JUST FOR TESTING PURPOSES.
 
-This build has hardcoded the fix into Zygisk native libs like v13.0.
-
-You can't use pif.json or pif.prop files to spoof custom props.
+- Removed custom resetprop.
+- Fix JSON parsing.
+- Less libs size.
+- Few code improvements.

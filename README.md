@@ -27,9 +27,9 @@ It injects a classes.dex file to modify a few fields in the android.os.Build cla
 
 The purpose of the module is to avoid a hardware attestation.
 
-## About 'pif.json' file
+## About 'custom.pif.json' file
 
-You can modify this file in the module directory to spoof custom values to the GMS unstable process.
+You can create this file in the module directory to spoof custom values to the GMS unstable process. It will be used instead of the included pif.json.
 
 You can't use values from recent devices due them triggering hardware backed attestation.
 

@@ -12,6 +12,8 @@
 
 #define JSON_FILE_PATH "/data/adb/modules/playintegrityfix/pif.json"
 
+#define CUSTOM_JSON_FILE_PATH "/data/adb/modules/playintegrityfix/custom.pif.json"
+
 static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
@@ -247,7 +249,9 @@ static void companion(int fd) {
         fclose(dex);
     }
 
-    FILE *json = fopen(JSON_FILE_PATH, "r");
+    FILE *json = fopen(CUSTOM_JSON_FILE_PATH, "r");
+    if (!json)
+       FILE *json = fopen(JSON_FILE_PATH, "r");
 
     if (json) {
         fseek(json, 0, SEEK_END);

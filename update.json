@@ -1,6 +1,6 @@
 {
-    "version": "v13.8",
-    "versionCode": 138,
-    "zipUrl": "https://github.com/chiteroman/PlayIntegrityFix/releases/download/v13.8/PlayIntegrityFix_v13.8.zip",
-    "changelog": "https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/changelog.md"
+    "version": "v2.1",
+    "versionCode": 2101,
+    "zipUrl": "https://github.com/chiteroman/PlayIntegrityFix/releases/download/PROPS/PlayIntegrityFix_PROPS-v2.1.zip",
+    "changelog": "https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/custom/changelog.md"
 }

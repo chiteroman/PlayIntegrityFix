@@ -15,33 +15,15 @@ resetprop_if_match() {
     [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && resetprop $NAME $VALUE
 }
 
-# RootBeer, Microsoft
-resetprop_if_diff ro.build.tags release-keys
-
-# Samsung
-resetprop_if_diff ro.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.warranty_bit 0
-resetprop_if_diff ro.warranty_bit 0
-
-# OnePlus
-resetprop_if_diff ro.is_ever_orange 0
-
-# Other
-resetprop_if_diff ro.build.type user
-resetprop_if_diff ro.debuggable 0
-resetprop_if_diff ro.secure 1
-
 # Magisk recovery mode
 resetprop_if_match ro.bootmode recovery unknown
 resetprop_if_match ro.boot.mode recovery unknown
 resetprop_if_match vendor.boot.mode recovery unknown
 
 # SELinux
-if [ -n "$(getprop ro.build.selinux)" ]; then
-	resetprop --delete ro.build.selinux
+if [ -n "$(resetprop ro.build.selinux)" ]; then
+    resetprop --delete ro.build.selinux
 fi
-
 # use toybox to protect *stat* access time reading
 if [ "$(toybox cat /sys/fs/selinux/enforce)" == "0" ]; then
     chmod 640 /sys/fs/selinux/enforce
