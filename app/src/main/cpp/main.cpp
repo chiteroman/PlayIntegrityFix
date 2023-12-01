@@ -18,32 +18,34 @@ static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static volatile T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
         if (FIRST_API_LEVEL.empty()) {
             LOGD("[%s]: %s -> %s", name, value, DEFAULT_FIRST_API_LEVEL);
-            return o_callback(cookie, name, DEFAULT_FIRST_API_LEVEL, serial);
+            return callbacks[cookie](cookie, name, DEFAULT_FIRST_API_LEVEL, serial);
         } else {
             LOGD("[%s]: %s -> %s", name, value, FIRST_API_LEVEL.c_str());
-            return o_callback(cookie, name, FIRST_API_LEVEL.c_str(), serial);
+            return callbacks[cookie](cookie, name, FIRST_API_LEVEL.c_str(), serial);
         }
     }
 
     if (prop.ends_with("security_patch")) {
         if (!SECURITY_PATCH.empty()) {
             LOGD("[%s]: %s -> %s", name, value, SECURITY_PATCH.c_str());
-            return o_callback(cookie, name, SECURITY_PATCH.c_str(), serial);
+            return callbacks[cookie](cookie, name, SECURITY_PATCH.c_str(), serial);
         }
     }
 
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -53,7 +55,7 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -119,6 +121,9 @@ public:
             return;
         }
 
+        LOGD("Read from file descriptor file 'classes.dex' -> %ld bytes", dexSize);
+        LOGD("Read from file descriptor file 'pif.json' -> %ld bytes", jsonSize);
+
         dexVector.resize(dexSize);
         read(fd, dexVector.data(), dexSize);
 
@@ -126,9 +131,6 @@ public:
         read(fd, jsonVector.data(), jsonSize);
 
         close(fd);
-
-        LOGD("Read from file descriptor file 'classes.dex' -> %ld bytes", dexSize);
-        LOGD("Read from file descriptor file 'pif.json' -> %ld bytes", jsonSize);
 
         std::string data(jsonVector.cbegin(), jsonVector.cend());
         json = nlohmann::json::parse(data, nullptr, false, true);
