@@ -1,6 +1,6 @@
 id=playintegrityfix
 name=Play Integrity Fix (resetprop)
-version=v14.0-BETA-resetprop
+version=v14.0-resetprop-BETA-2
 versionCode=139
 author=chiteroman
 description=Fix CTS profile (SafetyNet) and DEVICE verdict (Play Integrity).

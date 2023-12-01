@@ -111,7 +111,7 @@ tasks.register<Zip>("zip") {
 }
 
 tasks.register<Zip>("zip-resetprop") {
-    dependsOn("copyFiles")
+    dependsOn("copyFiles-resetprop")
 
     archiveFileName.set("PlayIntegrityFix-resetprop.zip")
     destinationDirectory.set(project.rootDir.resolve("out"))

@@ -5,7 +5,7 @@ fi
 
 # Copy default pif.json if it doesn't exist.
 if [ ! -e /data/adb/pif.json ]; then
-	mv -f $MODPATH/pif.json /data/adb/pif.json
+	cp -af $MODPATH/pif.json /data/adb/pif.json
 	ui_print "Moved default pif.json file!"
 fi
 

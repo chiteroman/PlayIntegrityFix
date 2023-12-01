@@ -12,6 +12,8 @@
 
 #define JSON_FILE_PATH "/data/adb/pif.json"
 
+#define DEFAULT_FIRST_API_LEVEL "23"
+
 static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
@@ -26,7 +28,8 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (prop.ends_with("api_level")) {
         if (FIRST_API_LEVEL.empty()) {
-            return o_callback(cookie, name, "23", serial);
+            LOGD("[%s]: %s -> %s", name, value, DEFAULT_FIRST_API_LEVEL);
+            return o_callback(cookie, name, DEFAULT_FIRST_API_LEVEL, serial);
         } else {
             LOGD("[%s]: %s -> %s", name, value, FIRST_API_LEVEL.c_str());
             return o_callback(cookie, name, FIRST_API_LEVEL.c_str(), serial);
