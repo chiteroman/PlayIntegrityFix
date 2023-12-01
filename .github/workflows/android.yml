@@ -24,3 +24,13 @@ jobs:
       run: chmod +x gradlew
     - name: Build with Gradle
       run: ./gradlew assembleRelease
+    - name: Create PlayIntegrityFix zip
+      uses: actions/upload-artifact@v3
+      with:
+        name: PlayIntegrityFix
+        path: out/PlayIntegrityFix.zip
+    - name: Create PlayIntegrityFix-resetprop zip
+      uses: actions/upload-artifact@v3
+      with:
+        name: PlayIntegrityFix-resetprop
+        path: out/PlayIntegrityFix-resetprop.zip
