@@ -12,7 +12,7 @@
 
 #define JSON_FILE_PATH "/data/adb/pif.json"
 
-static std::string FIRST_API_LEVEL;
+static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -22,14 +22,21 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
-    if (strcmp(name, "ro.product.first_api_level") == 0) {
+    std::string_view prop(name);
+
+    if (prop.ends_with("api_level")) {
         if (FIRST_API_LEVEL.empty()) {
-            LOGD("[ro.product.first_api_level]: %s -> 23", value);
             return o_callback(cookie, name, "23", serial);
         } else {
-            const char *newValue = FIRST_API_LEVEL.c_str();
-            LOGD("[ro.product.first_api_level]: %s -> %s", value, newValue);
-            return o_callback(cookie, name, newValue, serial);
+            LOGD("[%s]: %s -> %s", name, value, FIRST_API_LEVEL.c_str());
+            return o_callback(cookie, name, FIRST_API_LEVEL.c_str(), serial);
+        }
+    }
+
+    if (prop.ends_with("security_patch")) {
+        if (!SECURITY_PATCH.empty()) {
+            LOGD("[%s]: %s -> %s", name, value, SECURITY_PATCH.c_str());
+            return o_callback(cookie, name, SECURITY_PATCH.c_str(), serial);
         }
     }
 
@@ -54,8 +61,8 @@ static void doHook() {
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
-    DobbyHook(handle, (void *) my_system_property_read_callback,
-              (void **) &o_system_property_read_callback);
+    DobbyHook(handle, (dobby_dummy_func_t) my_system_property_read_callback,
+              (dobby_dummy_func_t *) &o_system_property_read_callback);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -152,6 +159,18 @@ private:
 
     void readJson() {
         LOGD("JSON contains %d keys!", static_cast<int>(json.size()));
+
+        if (json.contains("SECURITY_PATCH")) {
+            if (json["SECURITY_PATCH"].is_null()) {
+                LOGD("Key SECURITY_PATCH is null!");
+            } else if (json["SECURITY_PATCH"].is_string()) {
+                SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+            } else {
+                LOGD("Error parsing SECURITY_PATCH!");
+            }
+        } else {
+            LOGD("Key SECURITY_PATCH doesn't exist in JSON file!");
+        }
 
         if (json.contains("FIRST_API_LEVEL")) {
             if (json["FIRST_API_LEVEL"].is_null()) {
