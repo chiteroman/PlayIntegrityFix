@@ -1,3 +1,6 @@
+# Remove temp file
+rm -f /data/adb/modules/playintegrityfix/temp
+
 # Conditional sensitive properties
 
 RESETPROP="${0%/*}/resetprop"

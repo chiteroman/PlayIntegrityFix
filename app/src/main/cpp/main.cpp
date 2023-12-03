@@ -12,7 +12,7 @@
 
 #define JSON_FILE_PATH "/data/adb/pif.json"
 
-#define DEFAULT_FIRST_API_LEVEL "23"
+#define JSON_TEMP_FILE "/data/adb/modules/playintegrityfix/temp"
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
@@ -29,19 +29,16 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        if (FIRST_API_LEVEL.empty()) {
-            LOGD("[%s]: %s -> %s", name, value, DEFAULT_FIRST_API_LEVEL);
-            return callbacks[cookie](cookie, name, DEFAULT_FIRST_API_LEVEL, serial);
-        } else {
-            LOGD("[%s]: %s -> %s", name, value, FIRST_API_LEVEL.c_str());
-            return callbacks[cookie](cookie, name, FIRST_API_LEVEL.c_str(), serial);
+        if (!FIRST_API_LEVEL.empty()) {
+            value = FIRST_API_LEVEL.c_str();
+            LOGD("[%s]: %s", name, value);
         }
     }
 
     if (prop.ends_with("security_patch")) {
         if (!SECURITY_PATCH.empty()) {
-            LOGD("[%s]: %s -> %s", name, value, SECURITY_PATCH.c_str());
-            return callbacks[cookie](cookie, name, SECURITY_PATCH.c_str(), serial);
+            value = SECURITY_PATCH.c_str();
+            LOGD("[%s]: %s", name, value);
         }
     }
 
@@ -238,17 +235,32 @@ static void companion(int fd) {
         fclose(dex);
     }
 
-    FILE *json = fopen(JSON_FILE_PATH, "r");
+    if (std::filesystem::exists(JSON_FILE_PATH)) {
+        FILE *json = fopen(JSON_FILE_PATH, "rb");
 
-    if (json) {
-        fseek(json, 0, SEEK_END);
-        jsonSize = ftell(json);
-        fseek(json, 0, SEEK_SET);
+        if (json) {
+            fseek(json, 0, SEEK_END);
+            jsonSize = ftell(json);
+            fseek(json, 0, SEEK_SET);
 
-        jsonVector.resize(jsonSize);
-        fread(jsonVector.data(), 1, jsonSize, json);
+            jsonVector.resize(jsonSize);
+            fread(jsonVector.data(), 1, jsonSize, json);
 
-        fclose(json);
+            fclose(json);
+        }
+    } else if (std::filesystem::exists(JSON_TEMP_FILE)) {
+        FILE *json = fopen(JSON_TEMP_FILE, "rb");
+
+        if (json) {
+            fseek(json, 0, SEEK_END);
+            jsonSize = ftell(json);
+            fseek(json, 0, SEEK_SET);
+
+            jsonVector.resize(jsonSize);
+            fread(jsonVector.data(), 1, jsonSize, json);
+
+            fclose(json);
+        }
     }
 
     write(fd, &dexSize, sizeof(long));
