@@ -2,10 +2,18 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v14.0
+# v14.1
 
-Google banned v13.9 fingerprint.
+If you don't want to use your custom props to spoof, remove the file.
 
-Now you must search a valid fingerprint, you must modify /data/adb/pif.json file to spoof a valid certified device.
+On terminal as root: rm -f /data/adb/pif.json
 
-Good luck.
+I will try to update the fingerprint when Google bans it.
+
+Instead reinstalling the module you only need to kill GMS unstable process.
+
+On terminal as root: killall com.google.android.gms.unstable
+
+When installing this version you must reboot the device.
+
+Any problem report on GitHub :)

@@ -235,32 +235,27 @@ static void companion(int fd) {
         fclose(dex);
     }
 
+    FILE *json;
+
     if (std::filesystem::exists(JSON_FILE_PATH)) {
-        FILE *json = fopen(JSON_FILE_PATH, "rb");
 
-        if (json) {
-            fseek(json, 0, SEEK_END);
-            jsonSize = ftell(json);
-            fseek(json, 0, SEEK_SET);
+        json = fopen(JSON_FILE_PATH, "rb");
 
-            jsonVector.resize(jsonSize);
-            fread(jsonVector.data(), 1, jsonSize, json);
+    } else {
+        std::filesystem::remove(JSON_TEMP_FILE);
+        system("/data/adb/modules/playintegrityfix/curl -o /data/adb/modules/playintegrityfix/temp https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/pif.json");
+        json = fopen(JSON_TEMP_FILE, "rb");
+    }
 
-            fclose(json);
-        }
-    } else if (std::filesystem::exists(JSON_TEMP_FILE)) {
-        FILE *json = fopen(JSON_TEMP_FILE, "rb");
+    if (json) {
+        fseek(json, 0, SEEK_END);
+        jsonSize = ftell(json);
+        fseek(json, 0, SEEK_SET);
 
-        if (json) {
-            fseek(json, 0, SEEK_END);
-            jsonSize = ftell(json);
-            fseek(json, 0, SEEK_SET);
+        jsonVector.resize(jsonSize);
+        fread(jsonVector.data(), 1, jsonSize, json);
 
-            jsonVector.resize(jsonSize);
-            fread(jsonVector.data(), 1, jsonSize, json);
-
-            fclose(json);
-        }
+        fclose(json);
     }
 
     write(fd, &dexSize, sizeof(long));
