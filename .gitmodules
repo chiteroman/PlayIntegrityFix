@@ -1,0 +1,3 @@
+[submodule "app/src/main/cpp/libcxx"]
+	path = app/src/main/cpp/libcxx
+	url = https://github.com/topjohnwu/libcxx.git

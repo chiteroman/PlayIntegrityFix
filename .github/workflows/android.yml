@@ -2,9 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "dev" ]
 
 jobs:
   build:
@@ -12,25 +12,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Check out
+      uses: actions/checkout@v4
+      with:
+        submodules: "recursive"
+
     - name: set up JDK 17
       uses: actions/setup-java@v3
       with:
-        java-version: '17'
         distribution: 'temurin'
-        cache: gradle
+        java-version: '17'
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+      
     - name: Build with Gradle
       run: ./gradlew assembleRelease
-    - name: Create PlayIntegrityFix zip
+      
+    - name: Upload PlayIntegrityFix.zip
       uses: actions/upload-artifact@v3
       with:
         name: PlayIntegrityFix
-        path: out/PlayIntegrityFix.zip
-    - name: Create PlayIntegrityFix-resetprop zip
-      uses: actions/upload-artifact@v3
-      with:
-        name: PlayIntegrityFix-resetprop
-        path: out/PlayIntegrityFix-resetprop.zip
+        path: module/*
