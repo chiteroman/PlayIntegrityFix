@@ -3,5 +3,5 @@ name=Play Integrity Fix (DEV)
 version=v1
 versionCode=1
 author=chiteroman
-description=Fuck Play Integrity API for yourself.
+description=Fuck Play Integrity API by yourself.
 updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/dev/update.json

@@ -43,7 +43,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         }
     }
 
-    LOGD("[%s]: %s", name, value);
+    if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s]: %s", name, value);
 
     return o_callback(cookie, name, value, serial);
 }
@@ -129,9 +129,7 @@ public:
         LOGD("JSON contains %d keys!", static_cast<int>(json.size()));
 
         if (json.contains("SECURITY_PATCH")) {
-            if (json["SECURITY_PATCH"].is_null()) {
-                LOGD("Key SECURITY_PATCH is null!");
-            } else if (json["SECURITY_PATCH"].is_string()) {
+            if (json["SECURITY_PATCH"].is_string()) {
                 SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
             } else {
                 LOGD("Error parsing SECURITY_PATCH!");
@@ -141,9 +139,7 @@ public:
         }
 
         if (json.contains("FIRST_API_LEVEL")) {
-            if (json["FIRST_API_LEVEL"].is_null()) {
-                LOGD("Key FIRST_API_LEVEL is null!");
-            } else if (json["FIRST_API_LEVEL"].is_string()) {
+            if (json["FIRST_API_LEVEL"].is_string()) {
                 FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
             } else {
                 LOGD("Error parsing FIRST_API_LEVEL!");
@@ -153,9 +149,7 @@ public:
         }
 
         if (json.contains("BUILD_ID")) {
-            if (json["BUILD_ID"].is_null()) {
-                LOGD("Key BUILD_ID is null!");
-            } else if (json["BUILD_ID"].is_string()) {
+            if (json["BUILD_ID"].is_string()) {
                 BUILD_ID = json["BUILD_ID"].get<std::string>();
             } else {
                 LOGD("Error parsing BUILD_ID!");
@@ -165,9 +159,7 @@ public:
         }
 
         if (json.contains("VNDK_VERSION")) {
-            if (json["VNDK_VERSION"].is_null()) {
-                LOGD("Key VNDK_VERSION is null!");
-            } else if (json["VNDK_VERSION"].is_string()) {
+            if (json["VNDK_VERSION"].is_string()) {
                 VNDK_VERSION = json["VNDK_VERSION"].get<std::string>();
             } else {
                 LOGD("Error parsing VNDK_VERSION!");

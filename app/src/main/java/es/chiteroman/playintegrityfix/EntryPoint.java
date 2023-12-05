@@ -67,6 +67,7 @@ public final class EntryPoint {
         setProp("BRAND", map.get("BRAND"));
         setProp("MODEL", map.get("MODEL"));
         setProp("FINGERPRINT", map.get("FINGERPRINT"));
+        setProp("ID", map.get("BUILD_ID"));
         setVersionProp("SECURITY_PATCH", map.get("SECURITY_PATCH"));
     }
 
