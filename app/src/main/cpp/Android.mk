@@ -24,9 +24,5 @@ else ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
     LOCAL_C_INCLUDES += $(LOCAL_PATH)/shadowhook/arch/arm64
 endif
 
-LOCAL_STATIC_LIBRARIES := libcxx
 LOCAL_LDLIBS := -llog
 include $(BUILD_SHARED_LIBRARY)
-
-LIBCXX := D:\libcxx
-include $(LIBCXX)/Android.mk
