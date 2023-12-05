@@ -4,8 +4,6 @@ https://t.me/playintegrityfix
 
 # v14.2
 
-DO NOT UPDATE TO THIS VERSION IF YOU ARE USING CUSTOM FINGERPRINT!
+Plug and play version!
 
-This release is only for people who don't know how to use custom spoof.
-
-I will release a new version for custom spoof later.
+If you want to spoof your custom props use: https://github.com/chiteroman/PlayIntegrityFix/releases/tag/DEV-v1
