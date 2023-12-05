@@ -1,6 +1,3 @@
-# Remove temp file
-rm -f /data/adb/modules/playintegrityfix/temp
-
 # Conditional sensitive properties
 
 resetprop_if_diff() {

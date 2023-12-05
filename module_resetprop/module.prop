@@ -1,7 +1,0 @@
-id=playintegrityfix
-name=Play Integrity Fix (resetprop)
-version=v14.1-resetprop
-versionCode=14100
-author=chiteroman
-description=Fix CTS profile (SafetyNet) and DEVICE verdict (Play Integrity).
-updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json

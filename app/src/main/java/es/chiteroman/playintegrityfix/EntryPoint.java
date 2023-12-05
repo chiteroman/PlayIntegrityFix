@@ -1,34 +1,18 @@
 package es.chiteroman.playintegrityfix;
 
 import android.os.Build;
-import android.util.JsonReader;
 import android.util.Log;
 
-import java.io.IOException;
-import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
-import java.util.HashMap;
-import java.util.Map;
 
 public final class EntryPoint {
-    private static final Map<String, String> map = new HashMap<>();
 
-    public static void init(String data) {
-        try (JsonReader reader = new JsonReader(new StringReader(data))) {
-            reader.beginObject();
-            while (reader.hasNext()) {
-                map.put(reader.nextName(), reader.nextString());
-            }
-            reader.endObject();
-        } catch (IOException e) {
-            LOG("Couldn't read JSON from Zygisk: " + e);
-            return;
-        }
+    public static void init() {
         spoofProvider();
         spoofDevice();
     }
@@ -61,13 +45,13 @@ public final class EntryPoint {
     }
 
     static void spoofDevice() {
-        setProp("PRODUCT", map.get("PRODUCT"));
-        setProp("DEVICE", map.get("DEVICE"));
-        setProp("MANUFACTURER", map.get("MANUFACTURER"));
-        setProp("BRAND", map.get("BRAND"));
-        setProp("MODEL", map.get("MODEL"));
-        setProp("FINGERPRINT", map.get("FINGERPRINT"));
-        setVersionProp("SECURITY_PATCH", map.get("SECURITY_PATCH"));
+        setProp("PRODUCT", "taimen");
+        setProp("DEVICE", "taimen");
+        setProp("MANUFACTURER", "Google");
+        setProp("BRAND", "google");
+        setProp("MODEL", "Pixel 2 XL");
+        setProp("FINGERPRINT", "google/taimen/taimen:10/QQ2A.200501.001.B3/6396602:user/release-keys");
+        setVersionProp("SECURITY_PATCH", "2020-05-05");
     }
 
     private static void setProp(String name, String value) {
