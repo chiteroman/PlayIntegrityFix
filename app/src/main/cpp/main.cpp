@@ -2,6 +2,7 @@
 #include <sys/system_properties.h>
 #include <unistd.h>
 #include <string_view>
+#include <vector>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
@@ -10,9 +11,9 @@
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-T_Callback o_callback = nullptr;
+static T_Callback o_callback = nullptr;
 
-void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
+static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
     if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
@@ -31,9 +32,10 @@ void modify_callback(void *cookie, const char *name, const char *value, uint32_t
     return o_callback(cookie, name, value, serial);
 }
 
-void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
+static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
 
-void my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
+static void
+my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
@@ -41,7 +43,7 @@ void my_system_property_read_callback(const prop_info *pi, T_Callback callback, 
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
-void doHook() {
+static void doHook() {
     shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
     void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
                                             reinterpret_cast<void *>(my_system_property_read_callback),
@@ -71,13 +73,14 @@ public:
 
             if (process == "com.google.android.gms.unstable") {
 
+                long size = 0;
                 int fd = api->connectCompanion();
 
-                read(fd, &bufferSize, sizeof(int));
+                read(fd, &size, sizeof(long));
 
-                if (bufferSize > 0) {
-                    buffer = static_cast<char *>(calloc(1, bufferSize));
-                    read(fd, buffer, bufferSize);
+                if (size > 0) {
+                    vector.resize(size);
+                    read(fd, vector.data(), size);
                 } else {
                     api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
                     LOGD("Couldn't read classes.dex");
@@ -93,15 +96,13 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (bufferSize < 1 || buffer == nullptr) return;
+        if (vector.empty()) return;
 
-        LOGD("Read from fd: %d bytes!", bufferSize);
+        LOGD("Read from fd: %ld bytes!", static_cast<long>(vector.size()));
 
         doHook();
 
         inject();
-
-        free(buffer);
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -111,8 +112,7 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    char *buffer = nullptr;
-    int bufferSize = 0;
+    std::vector<char> vector;
 
     void inject() {
         LOGD("get system classloader");
@@ -125,7 +125,7 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buff = env->NewDirectByteBuffer(buffer, bufferSize);
+        auto buff = env->NewDirectByteBuffer(vector.data(), vector.size());
         auto dexCl = env->NewObject(dexClClass, dexClInit, buff, systemClassLoader);
 
         LOGD("load class");
@@ -143,26 +143,24 @@ private:
 };
 
 static void companion(int fd) {
-    int dexSize = 0;
-    char *buffer = nullptr;
+    std::vector<char> vector;
+    long size = 0;
 
     FILE *dex = fopen("/data/adb/modules/playintegrityfix/classes.dex", "rb");
 
     if (dex) {
         fseek(dex, 0, SEEK_END);
-        dexSize = static_cast<int>(ftell(dex));
+        size = ftell(dex);
         fseek(dex, 0, SEEK_SET);
 
-        buffer = static_cast<char *>(calloc(1, dexSize));
-        fread(buffer, 1, dexSize, dex);
+        vector.resize(size);
+        fread(vector.data(), 1, size, dex);
 
         fclose(dex);
     }
 
-    write(fd, &dexSize, sizeof(int));
-    write(fd, buffer, dexSize);
-
-    free(buffer);
+    write(fd, &size, sizeof(long));
+    write(fd, vector.data(), size);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
