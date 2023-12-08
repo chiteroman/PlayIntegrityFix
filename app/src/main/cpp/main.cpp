@@ -65,8 +65,8 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        if (to_app_id(args->uid) < 10000 || to_app_id(args->uid) > 19999) {
-            // not app process, skip
+        if (to_app_id(args->uid) < 10000 || to_app_id(args->uid) > 19999 || // not app process
+            (args->is_child_zygote && *(args->is_child_zygote))) { // app_zygote
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
