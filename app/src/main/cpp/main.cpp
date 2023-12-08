@@ -55,6 +55,8 @@ static void doHook() {
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
 }
 
+#define to_app_id(uid) (uid % 100000)
+
 class PlayIntegrityFix : public zygisk::ModuleBase {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
@@ -63,15 +65,20 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+        if (to_app_id(args->uid) < 10000 || to_app_id(args->uid) > 19999) {
+            // not app process, skip
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
 
-        std::string_view process(rawProcess);
+        const auto *process = env->GetStringUTFChars(args->nice_name, nullptr);
+        const auto *app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        if (process.starts_with("com.google.android.gms")) {
+        if (std::string_view(app_data_dir).ends_with("/com.google.android.gms")) { // gms processes
 
             api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-            if (process == "com.google.android.gms.unstable") {
+            if (std::string_view(process) == "com.google.android.gms.unstable") { // play integrity process
 
                 long size = 0;
                 int fd = api->connectCompanion();
@@ -92,7 +99,8 @@ public:
 
         } else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
 
-        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
+        env->ReleaseStringUTFChars(args->nice_name, process);
+        env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
