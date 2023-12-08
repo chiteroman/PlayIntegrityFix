@@ -65,21 +65,26 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        int is_gms = 0;
+
         if (to_app_id(args->uid) < 10000 || to_app_id(args->uid) > 19999 || // not app process
             (args->is_child_zygote && *(args->is_child_zygote))) { // app_zygote
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
+            goto dlclose_module;
         }
 
-        const auto *process = env->GetStringUTFChars(args->nice_name, nullptr);
-        const auto *app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        {
+            const auto *process = env->GetStringUTFChars(args->nice_name, nullptr);
+            const auto *app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+            is_gms += (std::string_view(app_data_dir).ends_with("/com.google.android.gms"));
+            is_gms += (is_gms && std::string_view(process) == "com.google.android.gms.unstable");
+            env->ReleaseStringUTFChars(args->nice_name, process);
+            env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
+        }
 
-        if (std::string_view(app_data_dir).ends_with("/com.google.android.gms")) { // gms processes
-
+        if (is_gms) { // gms processes
             api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-            if (std::string_view(process) == "com.google.android.gms.unstable") { // play integrity process
-
+            if (is_gms == 2) { // play integrity process
                 long size = 0;
                 int fd = api->connectCompanion();
 
@@ -88,19 +93,18 @@ public:
                 if (size > 0) {
                     vector.resize(size);
                     read(fd, vector.data(), size);
-                } else {
-                    api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-                    LOGD("Couldn't read classes.dex");
+                    close(fd);
+                    return;
                 }
-
+                
+                LOGD("Couldn't read classes.dex");
                 close(fd);
+            }
+        }
 
-            } else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        dlclose_module:
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
 
-        } else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-
-        env->ReleaseStringUTFChars(args->nice_name, process);
-        env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
