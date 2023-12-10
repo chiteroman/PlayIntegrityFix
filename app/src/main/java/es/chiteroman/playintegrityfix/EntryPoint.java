@@ -18,7 +18,7 @@ public final class EntryPoint {
     }
 
     private static void spoofProvider() {
-        final String KEYSTORE = "AndroidKeyStore";
+        String KEYSTORE = "AndroidKeyStore";
 
         try {
             Provider provider = Security.getProvider(KEYSTORE);

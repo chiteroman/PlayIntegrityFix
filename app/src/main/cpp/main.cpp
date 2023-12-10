@@ -3,33 +3,39 @@
 #include <unistd.h>
 #include <string_view>
 #include <vector>
+#include <map>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
+#define to_app_id(uid) (uid % 100000)
+
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
         value = "21";
+        LOGD("[%s]: %s", name, value);
     } else if (prop.ends_with("security_patch")) {
         value = "2020-05-05";
+        LOGD("[%s]: %s", name, value);
     } else if (prop == "ro.build.id") {
         value = "QQ2A.200501.001.B3";
+        LOGD("[%s]: %s", name, value);
     }
 
-    if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s]: %s", name, value);
-
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -39,7 +45,7 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -55,8 +61,6 @@ static void doHook() {
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
 }
 
-#define to_app_id(uid) (uid % 100000)
-
 class PlayIntegrityFix : public zygisk::ModuleBase {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
@@ -65,26 +69,28 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        int is_gms = 0;
+        bool isGms = false, isGmsUnstable = false;
 
         if (to_app_id(args->uid) < 10000 || to_app_id(args->uid) > 19999 || // not app process
             (args->is_child_zygote && *(args->is_child_zygote))) { // app_zygote
-            goto dlclose_module;
+
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
         }
 
-        {
-            const auto *process = env->GetStringUTFChars(args->nice_name, nullptr);
-            const auto *app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-            is_gms += (std::string_view(app_data_dir).ends_with("/com.google.android.gms"));
-            is_gms += (is_gms && std::string_view(process) == "com.google.android.gms.unstable");
-            env->ReleaseStringUTFChars(args->nice_name, process);
-            env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
+        auto process = env->GetStringUTFChars(args->nice_name, nullptr);
+
+        if (process) {
+            isGms = strncmp(process, "com.google.android.gms", 22) == 0;
+            isGmsUnstable = strcmp(process, "com.google.android.gms.unstable") == 0;
         }
 
-        if (is_gms) { // gms processes
+        env->ReleaseStringUTFChars(args->nice_name, process);
+
+        if (isGms) { // GMS processes
             api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-            if (is_gms == 2) { // play integrity process
+            if (isGmsUnstable) { // Unstable GMS process, which runs DroidGuard
                 long size = 0;
                 int fd = api->connectCompanion();
 
@@ -93,28 +99,29 @@ public:
                 if (size > 0) {
                     vector.resize(size);
                     read(fd, vector.data(), size);
-                    close(fd);
-                    return;
+                } else {
+                    LOGD("Couldn't read classes.dex");
+                    api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
                 }
-                
-                LOGD("Couldn't read classes.dex");
+
                 close(fd);
+                return;
             }
         }
 
-        dlclose_module:
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (vector.empty()) return;
 
-        LOGD("Read from fd: %ld bytes!", static_cast<long>(vector.size()));
+        LOGD("Read %ld bytes of classes.dex!", static_cast<long>(vector.size()));
 
         doHook();
 
         inject();
+
+        vector.clear();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -124,7 +131,7 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<char> vector;
+    std::vector<uint8_t> vector;
 
     void inject() {
         LOGD("get system classloader");
@@ -155,7 +162,7 @@ private:
 };
 
 static void companion(int fd) {
-    std::vector<char> vector;
+    std::vector<uint8_t> vector;
     long size = 0;
 
     FILE *dex = fopen("/data/adb/modules/playintegrityfix/classes.dex", "rb");

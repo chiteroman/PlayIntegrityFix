@@ -32,11 +32,11 @@ if [ "$(toybox cat /sys/fs/selinux/enforce)" == "0" ]; then
     chmod 440 /sys/fs/selinux/policy
 fi
 
+# KernelSU handles boot completed state in different file.
 if [ -z "$KSU" ] || [ "$KSU" = false ]; then
-	# SafetyNet/Play Integrity
 	{
 		# late props which must be set after boot_completed for various OEMs
-		until [ "$(getprop sys.boot_completed)" == "1" ]; do
+		until [ "$(resetprop sys.boot_completed)" == "1" ]; do
 			sleep 1
 		done
 

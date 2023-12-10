@@ -2,8 +2,10 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v14.2
+# v14.2.1
 
-Plug and play version!
+- Improve code logic.
+- Fix crash issues.
+- Xiaomi.eu and EliteROMs auto remove inject app!
 
-If you want to spoof your custom props use: https://github.com/chiteroman/PlayIntegrityFix/releases/tag/DEV-v1
+Same fingerprint as v14.2
