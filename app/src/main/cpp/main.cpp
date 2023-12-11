@@ -1,7 +1,6 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <fstream>
 
 #include "zygisk.hpp"
 #include "shadowhook.h"
@@ -17,35 +16,39 @@ static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID, VNDK_VERSION;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
         if (!FIRST_API_LEVEL.empty()) {
             value = FIRST_API_LEVEL.c_str();
+            LOGD("[%s]: %s", name, value);
         }
     } else if (prop.ends_with("security_patch")) {
         if (!SECURITY_PATCH.empty()) {
             value = SECURITY_PATCH.c_str();
+            LOGD("[%s]: %s", name, value);
         }
     } else if (prop.ends_with("vndk.version")) {
         if (!VNDK_VERSION.empty()) {
             value = VNDK_VERSION.c_str();
+            LOGD("[%s]: %s", name, value);
         }
     } else if (prop == "ro.build.id") {
         if (!BUILD_ID.empty()) {
             value = BUILD_ID.c_str();
+            LOGD("[%s]: %s", name, value);
         }
     }
 
-    if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s]: %s", name, value);
-
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -55,7 +58,7 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -79,40 +82,42 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        auto rawProc = env->GetStringUTFChars(args->nice_name, nullptr);
+        bool isGms = false, isGmsUnstable = false;
 
-        std::string_view process(rawProc);
+        auto process = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        if (process.starts_with("com.google.android.gms")) {
+        if (process) {
+            isGms = strncmp(process, "com.google.android.gms", 22) == 0;
+            isGmsUnstable = strcmp(process, "com.google.android.gms.unstable") == 0;
+        }
 
-            api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+        env->ReleaseStringUTFChars(args->nice_name, process);
 
-            if (process == "com.google.android.gms.unstable") {
+        if (isGms) api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-                int dexSize = 0, jsonSize = 0;
-                int fd = api->connectCompanion();
+        if (isGmsUnstable) {
+            uint32_t dexSize = 0, jsonSize = 0;
+            int fd = api->connectCompanion();
 
-                read(fd, &dexSize, sizeof(int));
-                read(fd, &jsonSize, sizeof(int));
+            read(fd, &dexSize, sizeof(uint32_t));
+            read(fd, &jsonSize, sizeof(uint32_t));
 
-                if (dexSize > 0 && jsonSize > 0) {
-                    dexVector.resize(dexSize);
-                    read(fd, dexVector.data(), dexSize);
+            if (dexSize > 0 && jsonSize > 0) {
+                dexVector.resize(dexSize);
+                read(fd, dexVector.data(), dexSize);
 
-                    jsonVector.resize(jsonSize);
-                    read(fd, jsonVector.data(), jsonSize);
-                } else {
-                    LOGD("Couldn't load files in memory!");
-                    api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-                }
+                jsonVector.resize(jsonSize);
+                read(fd, jsonVector.data(), jsonSize);
+            } else {
+                LOGD("Couldn't load files in memory!");
+                api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            }
 
-                close(fd);
+            close(fd);
+            return;
+        }
 
-            } else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-
-        } else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-
-        env->ReleaseStringUTFChars(args->nice_name, rawProc);
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
@@ -123,7 +128,7 @@ public:
         LOGD("Read %d bytes of classes.dex", static_cast<int>(dexVector.size()));
         LOGD("Read %d bytes of pif.json", static_cast<int>(jsonVector.size()));
 
-        std::string_view data(jsonVector.cbegin(), jsonVector.cend());
+        std::string_view data(reinterpret_cast<const char *>(jsonVector.data()), jsonVector.size());
         nlohmann::json json = nlohmann::json::parse(data, nullptr, false, true);
 
         LOGD("JSON contains %d keys!", static_cast<int>(json.size()));
@@ -206,24 +211,40 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<char> dexVector, jsonVector;
+    std::vector<uint8_t> dexVector, jsonVector;
 };
 
 static void companion(int fd) {
-    std::ifstream dex(DEX_FILE_PATH, std::ios::binary);
-    std::ifstream json(JSON_FILE_PATH, std::ios::binary);
+    uint32_t dexSize = 0, jsonSize = 0;
+    std::vector<uint8_t> dexVector, jsonVector;
 
-    std::vector<char> dexVector((std::istreambuf_iterator<char>(dex)),
-                                std::istreambuf_iterator<char>());
+    FILE *dex = fopen(DEX_FILE_PATH, "rb");
+    FILE *json = fopen(JSON_FILE_PATH, "rb");
 
-    std::vector<char> jsonVector((std::istreambuf_iterator<char>(json)),
-                                 std::istreambuf_iterator<char>());
+    if (dex) {
+        fseek(dex, 0, SEEK_END);
+        dexSize = ftell(dex);
+        fseek(dex, 0, SEEK_SET);
 
-    int dexSize = static_cast<int>(dexVector.size());
-    int jsonSize = static_cast<int>(jsonVector.size());
+        dexVector.resize(dexSize);
+        fread(dexVector.data(), 1, dexSize, dex);
 
-    write(fd, &dexSize, sizeof(int));
-    write(fd, &jsonSize, sizeof(int));
+        fclose(dex);
+    }
+
+    if (json) {
+        fseek(json, 0, SEEK_END);
+        jsonSize = ftell(json);
+        fseek(json, 0, SEEK_SET);
+
+        jsonVector.resize(jsonSize);
+        fread(jsonVector.data(), 1, jsonSize, json);
+
+        fclose(json);
+    }
+
+    write(fd, &dexSize, sizeof(uint32_t));
+    write(fd, &jsonSize, sizeof(uint32_t));
 
     write(fd, dexVector.data(), dexSize);
     write(fd, jsonVector.data(), jsonSize);

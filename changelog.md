@@ -2,6 +2,8 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v1 - DEV
+# v2 - DEV
 
-Initial release.
+- Improve code logic.
+- Fix crash issues.
+- Remove xiaomi.eu apps for spoofing.

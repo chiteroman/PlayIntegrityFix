@@ -1,6 +1,6 @@
 {
-    "version": "v1",
-    "versionCode": 1,
+    "version": "v2",
+    "versionCode": 2,
     "zipUrl": "https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/dev/out/PlayIntegrityFix.zip",
     "changelog": "https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/dev/changelog.md"
 }
