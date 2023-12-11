@@ -25,13 +25,16 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("api_level")) {
-        value = "21";
+        value = "23";
         LOGD("[%s]: %s", name, value);
     } else if (prop.ends_with("security_patch")) {
-        value = "2020-05-05";
+        value = "2018-01-05";
+        LOGD("[%s]: %s", name, value);
+    } else if (prop.ends_with("vndk.version")) {
+        value = "23";
         LOGD("[%s]: %s", name, value);
     } else if (prop == "ro.build.id") {
-        value = "QQ2A.200501.001.B3";
+        value = "NRD90M";
         LOGD("[%s]: %s", name, value);
     }
 
@@ -69,7 +72,6 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        bool isGms = false, isGmsUnstable = false;
 
         if (to_app_id(args->uid) < 10000 || to_app_id(args->uid) > 19999 || // not app process
             (args->is_child_zygote && *(args->is_child_zygote))) { // app_zygote
@@ -77,6 +79,8 @@ public:
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
+
+        bool isGms = false, isGmsUnstable = false;
 
         auto process = env->GetStringUTFChars(args->nice_name, nullptr);
 
@@ -89,24 +93,24 @@ public:
 
         if (isGms) { // GMS processes
             api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+        }
 
-            if (isGmsUnstable) { // Unstable GMS process, which runs DroidGuard
-                long size = 0;
-                int fd = api->connectCompanion();
+        if (isGmsUnstable) { // Unstable GMS process, which runs DroidGuard
+            uint32_t size = 0;
+            int fd = api->connectCompanion();
 
-                read(fd, &size, sizeof(long));
+            read(fd, &size, sizeof(uint32_t));
 
-                if (size > 0) {
-                    vector.resize(size);
-                    read(fd, vector.data(), size);
-                } else {
-                    LOGD("Couldn't read classes.dex");
-                    api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-                }
-
-                close(fd);
-                return;
+            if (size > 0) {
+                vector.resize(size);
+                read(fd, vector.data(), size);
+            } else {
+                LOGD("Couldn't read classes.dex");
+                api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             }
+
+            close(fd);
+            return;
         }
 
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
@@ -163,7 +167,7 @@ private:
 
 static void companion(int fd) {
     std::vector<uint8_t> vector;
-    long size = 0;
+    uint32_t size = 0;
 
     FILE *dex = fopen("/data/adb/modules/playintegrityfix/classes.dex", "rb");
 
@@ -178,7 +182,7 @@ static void companion(int fd) {
         fclose(dex);
     }
 
-    write(fd, &size, sizeof(long));
+    write(fd, &size, sizeof(uint32_t));
     write(fd, vector.data(), size);
 }
 

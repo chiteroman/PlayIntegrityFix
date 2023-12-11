@@ -45,13 +45,13 @@ public final class EntryPoint {
     }
 
     static void spoofDevice() {
-        setProp("PRODUCT", "taimen");
-        setProp("DEVICE", "taimen");
-        setProp("MANUFACTURER", "Google");
-        setProp("BRAND", "google");
-        setProp("MODEL", "Pixel 2 XL");
-        setProp("FINGERPRINT", "google/taimen/taimen:10/QQ2A.200501.001.B3/6396602:user/release-keys");
-        setVersionProp("SECURITY_PATCH", "2020-05-05");
+        setProp("PRODUCT", "foster_e_hdd");
+        setProp("DEVICE", "foster");
+        setProp("MANUFACTURER", "NVIDIA");
+        setProp("BRAND", "NVIDIA");
+        setProp("MODEL", "SHIELD Android TV");
+        setProp("FINGERPRINT", "NVIDIA/foster_e_hdd/foster:7.0/NRD90M/2427173_1038.2788:user/release-keys");
+        setVersionProp("SECURITY_PATCH", "2018-01-05");
     }
 
     private static void setProp(String name, String value) {

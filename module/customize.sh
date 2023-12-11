@@ -13,30 +13,26 @@ if [ -d /data/adb/modules/MagiskHidePropsConf ]; then
     ui_print "- ! WARNING, MagiskHidePropsConf module may cause issues with PIF"
 fi
 
-# Check if ROM is xiaomi.eu
-if [ "$(resetprop ro.build.host)" = "xiaomi.eu" ] || [ "$(resetprop ro.build.host)" = "EliteDevelopment" ]; then
+# Remove xiaomi.eu apps
 
-	ui_print "- ! Detected Xiaomi.eu custom ROM."
-
-	if [ -d "/product/app/XiaomiEUInject" ]; then
+if [ -d "/product/app/XiaomiEUInject" ]; then
 	
-		directory="$MODPATH/product/app/XiaomiEUInject"
+	directory="$MODPATH/product/app/XiaomiEUInject"
 
-		[ -d "$directory" ] || mkdir -p "$directory"
+	[ -d "$directory" ] || mkdir -p "$directory"
 
-		touch "$directory/.replace"
+	touch "$directory/.replace"
 		
-		ui_print "- XiaomiEUInject app removed."
-	fi
+	ui_print "- XiaomiEUInject app removed."
+fi
 	
-	if [ -d "/system/app/XInjectModule" ]; then
+if [ -d "/system/app/XInjectModule" ]; then
 	
-		directory="$MODPATH/system/app/XInjectModule"
+	directory="$MODPATH/system/app/XInjectModule"
 
-		[ -d "$directory" ] || mkdir -p "$directory"
+	[ -d "$directory" ] || mkdir -p "$directory"
 
-		touch "$directory/.replace"
+	touch "$directory/.replace"
 		
-		ui_print "- XInjectModule app removed."
-	fi
+	ui_print "- XInjectModule app removed."
 fi
