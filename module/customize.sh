@@ -5,12 +5,13 @@ fi
 
 # safetynet-fix module is obsolete and it's incompatible with PIF.
 if [ -d /data/adb/modules/safetynet-fix ]; then
-    abort "- !!! REMOVE safetynet-fix module and do NOT install it again along PIF."
+	touch /data/adb/modules/safetynet-fix/remove
+    ui_print "- ! safetynet-fix module will be removed. Do NOT install it again along PIF."
 fi
 
 # MagiskHidePropsConf module is obsolete in Android 8+ but it shouldn't give issues.
 if [ -d /data/adb/modules/MagiskHidePropsConf ]; then
-    ui_print "- ! WARNING, MagiskHidePropsConf module may cause issues with PIF"
+    ui_print "- ! WARNING, MagiskHidePropsConf module may cause issues with PIF."
 fi
 
 # Remove xiaomi.eu apps

@@ -2,10 +2,12 @@ We have a Telegram channel!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v14.2.1
+# v14.4
 
-- Improve code logic.
-- Fix crash issues.
-- Xiaomi.eu and EliteROMs auto remove inject app!
+- Update default fields values!
+- Merge DEV branch, this module can read /data/adb/pif.json file
+- Fixed issues.
 
-Same fingerprint as v14.2
+You must move the template from module folder to adb dir if you want to use your custom props.
+
+Thanks to Xiaomi.eu devs for the fingerprint 🥰
