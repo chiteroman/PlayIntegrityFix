@@ -24,7 +24,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=Release"
+                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
 
                 cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"

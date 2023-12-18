@@ -1,12 +1,9 @@
 {
-	"PRODUCT": "",
-	"DEVICE": "",
-	"MANUFACTURER": "",
-	"BRAND": "",
-	"MODEL": "",
-	"FINGERPRINT": "",
-	"SECURITY_PATCH": "",
-	"FIRST_API_LEVEL": "",
-	"BUILD_ID": "",
-	"VNDK_VERSION": ""
+	"PRODUCT": "b1-780_ww_gen1",
+	"DEVICE": "acer_barricadewifi",
+	"MANUFACTURER": "Acer",
+	"BRAND": "acer",
+	"MODEL": "B1-780",
+	"FINGERPRINT": "acer/b1-780_ww_gen1/acer_barricadewifi:6.0/MRA58K/1481784106:user/release-keys",
+	"FIRST_API_LEVEL": "21"
 }

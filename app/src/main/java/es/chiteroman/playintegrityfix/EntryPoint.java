@@ -31,8 +31,7 @@ public final class EntryPoint {
             reader.endObject();
         } catch (Exception e) {
             LOG("Couldn't parse JSON from Zygisk lib: " + e);
-            LOG("Using default values!");
-            setDefValues();
+            LOG("Remove /data/adb/pif.json");
         }
 
         spoofDevice();
@@ -45,16 +44,6 @@ public final class EntryPoint {
 
     static void spoofDevice() {
         map.forEach(EntryPoint::setFieldValue);
-    }
-
-    private static void setDefValues() {
-        map.clear();
-        map.put("PRODUCT", "WW_Z01H");
-        map.put("DEVICE", "ASUS_Z01H_1");
-        map.put("MANUFACTURER", "asus");
-        map.put("BRAND", "asus");
-        map.put("MODEL", "ASUS_Z01HD");
-        map.put("FINGERPRINT", "asus/WW_Z01H/ASUS_Z01H_1:7.1.1/NMF26F/WW_user_71.60.139.30_20180306:user/release-keys");
     }
 
     private static void spoofProvider() {

@@ -8,11 +8,6 @@
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
-#define DEF_SECURITY_PATCH "2018-02-05"
-#define DEF_FIRST_API_LEVEL "23"
-#define DEF_VNDK_VERSION "23"
-#define DEF_BUILD_ID "NMF26F"
-
 static std::string SECURITY_PATCH, FIRST_API_LEVEL, VNDK_VERSION, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
@@ -28,30 +23,22 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     std::string_view prop(name);
 
     if (prop.ends_with("security_patch")) {
-        if (SECURITY_PATCH.empty()) {
-            value = DEF_SECURITY_PATCH;
-        } else {
+        if (!SECURITY_PATCH.empty()) {
             value = SECURITY_PATCH.c_str();
         }
         LOGD("[%s]: %s", name, value);
     } else if (prop.ends_with("api_level")) {
-        if (FIRST_API_LEVEL.empty()) {
-            value = DEF_FIRST_API_LEVEL;
-        } else {
+        if (!FIRST_API_LEVEL.empty()) {
             value = FIRST_API_LEVEL.c_str();
         }
         LOGD("[%s]: %s", name, value);
     } else if (prop.ends_with("vndk.version")) {
-        if (VNDK_VERSION.empty()) {
-            value = DEF_VNDK_VERSION;
-        } else {
+        if (!VNDK_VERSION.empty()) {
             value = VNDK_VERSION.c_str();
         }
         LOGD("[%s]: %s", name, value);
     } else if (prop == "ro.build.id") {
-        if (BUILD_ID.empty()) {
-            value = DEF_BUILD_ID;
-        } else {
+        if (!BUILD_ID.empty()) {
             value = BUILD_ID.c_str();
         }
         LOGD("[%s]: %s", name, value);
@@ -161,6 +148,7 @@ private:
         if (json.contains("SECURITY_PATCH")) {
             if (json["SECURITY_PATCH"].is_null() || json["SECURITY_PATCH"].empty()) {
                 LOGD("SECURITY_PATCH is null or empty");
+                json.erase("SECURITY_PATCH");
             } else {
                 SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
             }
@@ -241,6 +229,11 @@ static void companion(int fd) {
     }
 
     FILE *json = fopen("/data/adb/pif.json", "rb");
+
+    if (json == nullptr) {
+
+        json = fopen("/data/adb/modules/playintegrityfix/pif.json", "rb");
+    }
 
     if (json) {
         fseek(json, 0, SEEK_END);

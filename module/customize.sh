@@ -5,7 +5,7 @@ fi
 
 # safetynet-fix module is obsolete and it's incompatible with PIF.
 if [ -d /data/adb/modules/safetynet-fix ]; then
-	touch /data/adb/modules/safetynet-fix/remove
+	rm -rf /data/adb/modules/safetynet-fix
     ui_print "- ! safetynet-fix module will be removed. Do NOT install it again along PIF."
 fi
 
