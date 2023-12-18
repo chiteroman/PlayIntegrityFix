@@ -31,7 +31,7 @@ jobs:
       run: ./gradlew assembleRelease
       
     - name: Upload PlayIntegrityFix.zip
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: PlayIntegrityFix
         path: module/*
