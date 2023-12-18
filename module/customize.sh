@@ -26,14 +26,16 @@ if [ -d "/product/app/XiaomiEUInject" ]; then
 		
 	ui_print "- XiaomiEUInject app removed."
 fi
+
+# Remove EliteRoms app
 	
-if [ -d "/system/app/XInjectModule" ]; then
+if [ -d "/system/app/EliteDevelopmentModule" ]; then
 	
-	directory="$MODPATH/system/app/XInjectModule"
+	directory="$MODPATH/system/app/EliteDevelopmentModule"
 
 	[ -d "$directory" ] || mkdir -p "$directory"
 
 	touch "$directory/.replace"
 		
-	ui_print "- XInjectModule app removed."
+	ui_print "- EliteDevelopmentModule app removed."
 fi
