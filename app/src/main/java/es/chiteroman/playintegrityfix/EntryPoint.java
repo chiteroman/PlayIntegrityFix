@@ -4,16 +4,18 @@ import android.os.Build;
 import android.util.JsonReader;
 import android.util.Log;
 
-import org.json.JSONException;
-
 import java.io.StringReader;
 import java.lang.reflect.Field;
+import java.security.KeyStore;
+import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
-public final class EntryPoint {
+public class EntryPoint {
     private static final Map<String, String> map = new HashMap<>();
 
     public static void init(String data) {
@@ -22,32 +24,41 @@ public final class EntryPoint {
             while (reader.hasNext()) {
                 String key = reader.nextName();
                 String value = reader.nextString();
-
-                if (key == null || key.isEmpty() || key.isBlank() || value == null || value.isEmpty() || value.isBlank())
-                    throw new JSONException("Empty key or value");
-
                 map.put(key, value);
             }
             reader.endObject();
         } catch (Exception e) {
             LOG("Couldn't parse JSON from Zygisk lib: " + e);
-            LOG("Remove /data/adb/pif.json");
         }
+
+        LOG("Map info (keys and values):");
+        map.forEach((s, s2) -> LOG(String.format("[%s] -> %s", s, s2)));
 
         spoofDevice();
         spoofProvider();
     }
 
-    static void LOG(String msg) {
+    protected static void LOG(String msg) {
         Log.d("PIF/Java", msg);
     }
 
-    static void spoofDevice() {
+    protected static void spoofDevice() {
         map.forEach(EntryPoint::setFieldValue);
+    }
+
+    protected static boolean isDroidGuard() {
+        return Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(e -> e.getClassName().toLowerCase(Locale.ENGLISH).contains("droidguard"));
     }
 
     private static void spoofProvider() {
         try {
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+
+            Field field = keyStore.getClass().getDeclaredField("keyStoreSpi");
+
+            field.setAccessible(true);
+            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) field.get(keyStore);
+
             Provider provider = Security.getProvider("AndroidKeyStore");
 
             Provider customProvider = new CustomProvider(provider);
@@ -79,12 +90,11 @@ public final class EntryPoint {
         String oldValue = null;
         try {
             oldValue = (String) field.get(null);
+            if (value.equals(oldValue)) return;
             field.set(null, value);
         } catch (IllegalAccessException e) {
             LOG("Couldn't get or set field: " + e);
         }
-        field.setAccessible(false);
-        if (value.equals(oldValue)) return;
-        LOG(String.format("[%s]: %s -> %s", name, oldValue, value));
+        LOG(String.format("Field '%s' with value '%s' is now set to '%s'", name, oldValue, value));
     }
 }

@@ -12,13 +12,11 @@ static std::string SECURITY_PATCH, FIRST_API_LEVEL, VNDK_VERSION, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
+static volatile T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr ||
-        !callbacks.contains(cookie))
-        return;
+    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
     std::string_view prop(name);
 
@@ -26,25 +24,23 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!SECURITY_PATCH.empty()) {
             value = SECURITY_PATCH.c_str();
         }
-        LOGD("[%s]: %s", name, value);
     } else if (prop.ends_with("api_level")) {
         if (!FIRST_API_LEVEL.empty()) {
             value = FIRST_API_LEVEL.c_str();
         }
-        LOGD("[%s]: %s", name, value);
     } else if (prop.ends_with("vndk.version")) {
         if (!VNDK_VERSION.empty()) {
             value = VNDK_VERSION.c_str();
         }
-        LOGD("[%s]: %s", name, value);
     } else if (prop == "ro.build.id") {
         if (!BUILD_ID.empty()) {
             value = BUILD_ID.c_str();
         }
-        LOGD("[%s]: %s", name, value);
     }
 
-    return callbacks[cookie](cookie, name, value, serial);
+    if (!prop.starts_with("cache") && !prop.starts_with("debug")) LOGD("[%s]: %s", name, value);
+
+    return o_callback(cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -54,7 +50,7 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    callbacks[cookie] = callback;
+    o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -81,37 +77,41 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
-        std::string process(rawProcess);
-        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
+        auto name = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        if (process.starts_with("com.google.android.gms")) {
+        if (name && strncmp(name, "com.google.android.gms", 22) == 0) {
 
             api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-            if (process == "com.google.android.gms.unstable") {
+            if (strcmp(name, "com.google.android.gms.unstable") == 0) {
 
                 int fd = api->connectCompanion();
 
                 read(fd, &dexSize, sizeof(dexSize));
                 read(fd, &jsonSize, sizeof(jsonSize));
 
-                auto vectorSize = dexSize + jsonSize;
+                if (dexSize < 1 || jsonSize < 1) {
 
-                if (vectorSize > 0) {
-                    vector.resize(vectorSize);
-                    read(fd, vector.data(), vectorSize);
-                } else {
-                    LOGD("Couldn't read classes.dex");
+                    LOGD("Couldn't read files in memory!");
                     api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+
+                } else {
+
+                    auto vectorSize = dexSize + jsonSize;
+
+                    if (vectorSize > 0) {
+                        vector.resize(vectorSize);
+                        read(fd, vector.data(), vectorSize);
+                    }
                 }
 
                 close(fd);
-                return;
-            }
-        }
 
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            } else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+
+        } else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+
+        env->ReleaseStringUTFChars(args->nice_name, name);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
@@ -148,7 +148,6 @@ private:
         if (json.contains("SECURITY_PATCH")) {
             if (json["SECURITY_PATCH"].is_null() || json["SECURITY_PATCH"].empty()) {
                 LOGD("SECURITY_PATCH is null or empty");
-                json.erase("SECURITY_PATCH");
             } else {
                 SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
             }
@@ -230,10 +229,7 @@ static void companion(int fd) {
 
     FILE *json = fopen("/data/adb/pif.json", "rb");
 
-    if (json == nullptr) {
-
-        json = fopen("/data/adb/modules/playintegrityfix/pif.json", "rb");
-    }
+    if (json == nullptr) json = fopen("/data/adb/modules/playintegrityfix/pif.json", "rb");
 
     if (json) {
         fseek(json, 0, SEEK_END);
