@@ -27,3 +27,6 @@ resetprop_if_diff vendor.boot.verifiedbootstate green
 resetprop_if_diff ro.boot.verifiedbootstate green
 resetprop_if_diff ro.boot.veritymode enforcing
 resetprop_if_diff vendor.boot.vbmeta.device_state locked
+
+# Restrict permissions to socket file
+chmod 440 /proc/net/unix

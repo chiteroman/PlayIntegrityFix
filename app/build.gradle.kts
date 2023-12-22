@@ -8,6 +8,10 @@ android {
     ndkVersion = "26.1.10909125"
     buildToolsVersion = "34.0.0"
 
+    buildFeatures {
+        prefab = true
+    }
+
     packaging {
         jniLibs {
             excludes += "**/libdobby.so"
@@ -56,6 +60,10 @@ android {
             version = "3.22.1"
         }
     }
+}
+
+dependencies {
+    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
 
 tasks.register("copyFiles") {

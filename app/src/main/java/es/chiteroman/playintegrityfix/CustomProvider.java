@@ -9,8 +9,6 @@ public class CustomProvider extends Provider {
 
         putAll(provider);
 
-        remove("KeyStore.AndroidKeyStore");
-
         put("KeyStore.AndroidKeyStore", CustomKeyStoreSpi.class.getName());
     }
 

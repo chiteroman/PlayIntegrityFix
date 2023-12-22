@@ -26,7 +26,7 @@ public class CustomKeyStoreSpi extends KeyStoreSpi {
 
         if (EntryPoint.isDroidGuard()) {
 
-            EntryPoint.LOG("DroidGuard call certificate chain! Throwing exception.");
+            EntryPoint.LOG("engineGetCertificateChain call! Throw exception");
             throw new UnsupportedOperationException();
         }
 

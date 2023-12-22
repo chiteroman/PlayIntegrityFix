@@ -52,8 +52,7 @@ if [ -d "/system/app/EliteDevelopmentModule" ]; then
 	ui_print "- EliteDevelopmentModule app removed."
 fi
 
-ui_print "! DO NOT REMOVE /data/adb/modules/playintegrityfix/pif.json"
-ui_print "! THIS FILE CONTAINS THE DEFAULT PROPS TO SPOOF A CERTIFIED DEVICE"
-ui_print "! IF YOU WANT TO USE YOUR CUSTOM PROPS, COPY THIS FILE TO /data/adb/pif.json"
-ui_print "! MODULE WILL READ FIRST THAT FILE, IF IT ISN'T EXIST, IT WILL READ THE MODULE FOLDER ONE"
-ui_print "! IF YOU REMOVE BOTH FILES EXPECT CRASHES"
+# Move pif.json file
+if [ ! -f "/data/adb/pif.json" ]; then
+	mv -f $MODPATH/pif.json /data/adb/
+fi

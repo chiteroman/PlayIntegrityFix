@@ -1,12 +1,8 @@
 {
-	"PRODUCT": "c01_ww",
-	"DEVICE": "acer_c01",
-	"MANUFACTURER": "Acer Inc.",
-	"BRAND": "acer",
-	"MODEL": "C01",
-	"FINGERPRINT": "acer/c01_ww/acer_c01:7.1.1/NMF26F/1521514970:user/release-keys",
-	"FIRST_API_LEVEL": "24",
-	"SECURITY_PATCH": "2018-04-01",
-	"VNDK_VERSION": null,
-	"BUILD_ID": null
+ "PRODUCT": "",
+ "DEVICE": "",
+ "MANUFACTURER": "",
+ "BRAND": "",
+ "MODEL": "",
+ "FINGERPRINT": ""
 }

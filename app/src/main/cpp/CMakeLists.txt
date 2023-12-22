@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("playintegrityfix")
 
-link_libraries(${CMAKE_SOURCE_DIR}/libcxx/${CMAKE_ANDROID_ARCH_ABI}.a)
+find_package(cxx REQUIRED CONFIG)
 
-include_directories(libcxx/include)
+link_libraries(cxx::cxx)
 
 add_library(${CMAKE_PROJECT_NAME} SHARED module.cpp)
 
