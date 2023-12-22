@@ -5,6 +5,7 @@
 
 #include "zygisk.hpp"
 #include "dobby.h"
+#include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
@@ -12,7 +13,7 @@
 
 #define PIF_JSON "/data/adb/pif.json"
 
-#define PIF_PROP "/data/adb/pif.prop"
+static std::string FIRST_API_LEVEL;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -24,8 +25,11 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (std::string_view(name).ends_with("api_level")) {
 
-        value = "23";
-        LOGD("Set '%s' to '%s'", name, value);
+        if (!FIRST_API_LEVEL.empty()) {
+
+            value = FIRST_API_LEVEL.c_str();
+            LOGD("Set '%s' to '%s'", name, value);
+        }
     }
 
     return o_callback(cookie, name, value, serial);
@@ -104,8 +108,6 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dir.empty()) return;
 
-        doHook();
-
         std::string classesDex(dir + "/classes.dex");
 
         FILE *dexFile = fopen(classesDex.c_str(), "rb");
@@ -119,6 +121,34 @@ public:
         }
 
         fclose(dexFile);
+
+        doHook();
+
+        std::string pifJson(dir + "/pif.json");
+
+        FILE *jsonFile = fopen(pifJson.c_str(), "r");
+
+        nlohmann::json json = nlohmann::json::parse(jsonFile, nullptr, false, true);
+
+        fclose(jsonFile);
+
+        if (json.contains("FIRST_API_LEVEL")) {
+
+            if (json["FIRST_API_LEVEL"].is_number_integer()) {
+
+                FIRST_API_LEVEL = std::to_string(json["FIRST_API_LEVEL"].get<int>());
+
+            } else if (json["FIRST_API_LEVEL"].is_string()) {
+
+                FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
+            }
+
+            json.erase("FIRST_API_LEVEL");
+
+        } else {
+
+            LOGD("JSON file doesn't contain FIRST_API_LEVEL key :(");
+        }
 
         LOGD("get system classloader");
         auto clClass = env->FindClass("java/lang/ClassLoader");
@@ -143,7 +173,7 @@ public:
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryClass, "init", "(Ljava/lang/String;)V");
-        auto str = env->NewStringUTF(findFileInDirectory().c_str());
+        auto str = env->NewStringUTF(json.dump().c_str());
         env->CallStaticVoidMethod(entryClass, entryInit, str);
 
         dir.clear();
@@ -157,26 +187,6 @@ private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
     std::string dir;
-
-    std::string findFileInDirectory() {
-
-        std::string jsonFilePath = dir + "/pif.json";
-        std::string propFilePath = dir + "/pif.prop";
-
-        FILE *jsonFile = fopen(jsonFilePath.c_str(), "r");
-        if (jsonFile) {
-            fclose(jsonFile);
-            return jsonFilePath;
-        }
-
-        FILE *propFile = fopen(propFilePath.c_str(), "r");
-        if (propFile) {
-            fclose(propFile);
-            return propFilePath;
-        }
-
-        return dir;
-    }
 };
 
 static void companion(int fd) {
@@ -193,6 +203,7 @@ static void companion(int fd) {
     LOGD("[ROOT] GMS dir: %s", dir.c_str());
 
     std::string classesDex(dir + "/classes.dex");
+    std::string pifJson(dir + "/pif.json");
 
     bool a = std::filesystem::copy_file(CLASSES_DEX, classesDex,
                                         std::filesystem::copy_options::overwrite_existing);
@@ -201,30 +212,12 @@ static void companion(int fd) {
                                              std::filesystem::perms::group_read |
                                              std::filesystem::perms::others_read);
 
-    bool b = false;
+    bool b = std::filesystem::copy_file(PIF_JSON, pifJson,
+                                        std::filesystem::copy_options::overwrite_existing);
 
-    if (std::filesystem::exists(PIF_JSON)) {
-
-        std::string pifJson(dir + "/pif.json");
-
-        b = std::filesystem::copy_file(PIF_JSON, pifJson,
-                                       std::filesystem::copy_options::overwrite_existing);
-
-        std::filesystem::permissions(pifJson, std::filesystem::perms::owner_read |
-                                              std::filesystem::perms::group_read |
-                                              std::filesystem::perms::others_read);
-
-    } else if (std::filesystem::exists(PIF_PROP)) {
-
-        std::string pifProp(dir + "/pif.prop");
-
-        b = std::filesystem::copy_file(PIF_PROP, pifProp,
-                                       std::filesystem::copy_options::overwrite_existing);
-
-        std::filesystem::permissions(pifProp, std::filesystem::perms::owner_read |
-                                              std::filesystem::perms::group_read |
-                                              std::filesystem::perms::others_read);
-    }
+    std::filesystem::permissions(pifJson, std::filesystem::perms::owner_read |
+                                          std::filesystem::perms::group_read |
+                                          std::filesystem::perms::others_read);
 
     bool done = a && b;
 

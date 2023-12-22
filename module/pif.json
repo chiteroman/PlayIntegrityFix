@@ -4,5 +4,6 @@
  "MANUFACTURER": "",
  "BRAND": "",
  "MODEL": "",
- "FINGERPRINT": ""
+ "FINGERPRINT": "",
+ "FIRST_API_LEVEL": 21
 }

@@ -4,7 +4,7 @@ import android.os.Build;
 import android.util.JsonReader;
 import android.util.Log;
 
-import java.io.FileReader;
+import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.security.KeyStore;
 import java.security.KeyStoreSpi;
@@ -14,39 +14,22 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 
 public class EntryPoint {
     private static final Map<String, String> map = new HashMap<>();
 
-    public static void init(String file) {
+    public static void init(String json) {
 
-        if (file.endsWith(".json")) {
-
-            try (JsonReader reader = new JsonReader(new FileReader(file))) {
-                reader.beginObject();
-                while (reader.hasNext()) {
-                    String key = reader.nextName();
-                    String value = reader.nextString();
-                    map.put(key, value);
-                }
-                reader.endObject();
-            } catch (Exception e) {
-                LOG("Error parsing JSON file: " + e);
+        try (JsonReader reader = new JsonReader(new StringReader(json))) {
+            reader.beginObject();
+            while (reader.hasNext()) {
+                String key = reader.nextName();
+                String value = reader.nextString();
+                map.put(key, value);
             }
-
-        } else if (file.endsWith(".prop")) {
-
-            try {
-                Properties properties = new Properties();
-
-                properties.load(new FileReader(file));
-
-                properties.forEach((o, o2) -> map.put((String) o, (String) o2));
-
-            } catch (Exception e) {
-                LOG("Error parsing PROP file: " + e);
-            }
+            reader.endObject();
+        } catch (Exception e) {
+            LOG("Error parsing JSON: " + e);
         }
 
         LOG("Map info (keys and values):");
@@ -76,6 +59,7 @@ public class EntryPoint {
 
             field.setAccessible(true);
             CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) field.get(keyStore);
+            field.setAccessible(false);
 
             Provider provider = Security.getProvider("AndroidKeyStore");
 
