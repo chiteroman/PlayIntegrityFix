@@ -13,21 +13,39 @@
 
 #define PIF_JSON "/data/adb/pif.json"
 
-static std::string FIRST_API_LEVEL;
+static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static volatile T_Callback o_callback = nullptr;
+static T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
     if (cookie == nullptr || name == nullptr || o_callback == nullptr) return;
 
-    if (std::string_view(name).ends_with("api_level")) {
+    std::string_view prop(name);
+
+    if (prop.ends_with("security_patch")) {
+
+        if (!SECURITY_PATCH.empty()) {
+
+            value = SECURITY_PATCH.c_str();
+            LOGD("Set '%s' to '%s'", name, value);
+        }
+
+    } else if (prop.ends_with("api_level")) {
 
         if (!FIRST_API_LEVEL.empty()) {
 
             value = FIRST_API_LEVEL.c_str();
+            LOGD("Set '%s' to '%s'", name, value);
+        }
+
+    } else if (prop == "ro.build.id") {
+
+        if (!BUILD_ID.empty()) {
+
+            value = BUILD_ID.c_str();
             LOGD("Set '%s' to '%s'", name, value);
         }
     }
@@ -148,6 +166,32 @@ public:
         } else {
 
             LOGD("JSON file doesn't contain FIRST_API_LEVEL key :(");
+        }
+
+        if (json.contains("SECURITY_PATCH")) {
+
+            if (json["SECURITY_PATCH"].is_string()) {
+
+                SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+            }
+
+        } else {
+
+            LOGD("JSON file doesn't contain SECURITY_PATCH key :(");
+        }
+
+        if (json.contains("BUILD_ID")) {
+
+            if (json["BUILD_ID"].is_string()) {
+
+                BUILD_ID = json["BUILD_ID"].get<std::string>();
+            }
+
+            json.erase("BUILD_ID");
+
+        } else {
+
+            LOGD("JSON file doesn't contain BUILD_ID key :(");
         }
 
         LOGD("get system classloader");

@@ -14,7 +14,7 @@ import java.util.Date;
 import java.util.Enumeration;
 
 public class CustomKeyStoreSpi extends KeyStoreSpi {
-    protected static volatile KeyStoreSpi keyStoreSpi;
+    public static volatile KeyStoreSpi keyStoreSpi;
 
     @Override
     public Key engineGetKey(String alias, char[] password) throws NoSuchAlgorithmException, UnrecoverableKeyException {

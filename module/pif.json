@@ -5,5 +5,7 @@
  "BRAND": "",
  "MODEL": "",
  "FINGERPRINT": "",
- "FIRST_API_LEVEL": 21
+ "FIRST_API_LEVEL": 21,
+ "SECURITY_PATCH": "",
+ "BUILD_ID": ""
 }
