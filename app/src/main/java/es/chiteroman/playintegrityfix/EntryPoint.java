@@ -7,6 +7,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.lang.reflect.Field;
+import java.security.KeyStore;
+import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
 
@@ -53,6 +55,14 @@ public final class EntryPoint {
 
     private static void spoofProvider() {
         try {
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            keyStore.load(null);
+
+            Field f = keyStore.getClass().getDeclaredField("keyStoreSpi");
+            f.setAccessible(true);
+            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) f.get(keyStore);
+            f.setAccessible(false);
+
             Provider provider = Security.getProvider("AndroidKeyStore");
 
             Provider customProvider = new CustomProvider(provider);
@@ -98,7 +108,7 @@ public final class EntryPoint {
             }
 
         } catch (IllegalAccessException e) {
-            LOG("Couldn't modify field :(");
+            LOG("Couldn't modify field: " + e);
         }
         field.setAccessible(false);
     }

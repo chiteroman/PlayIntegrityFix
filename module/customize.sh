@@ -52,7 +52,7 @@ if [ -d "/system/app/EliteDevelopmentModule" ]; then
 	ui_print "- EliteDevelopmentModule app removed."
 fi
 
-# Move empty pif.json file
-if [ ! -f "/data/adb/pif.json" ]; then
-	mv -f $MODPATH/pif.json /data/adb/
+if [ -f "/data/adb/pif.json" ]; then
+	mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"
+	ui_print "- Backup pif.json"
 fi

@@ -28,18 +28,13 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
-
-                cFlags += "-fvisibility=hidden"
-                cFlags += "-fvisibility-inlines-hidden"
-                cFlags += "-flto=full"
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
 
                 cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
                 cppFlags += "-fvisibility-inlines-hidden"
-                cppFlags += "-flto=full"
             }
         }
     }
@@ -48,9 +43,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            )
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
@@ -74,10 +67,8 @@ dependencies {
 tasks.register("copyFiles") {
     doLast {
         val moduleFolder = project.rootDir.resolve("module")
-        val dexFile =
-            project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
-        val soDir =
-            project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/out/lib")
+        val dexFile = project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
+        val soDir = project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/out/lib")
 
         dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 

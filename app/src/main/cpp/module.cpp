@@ -12,7 +12,9 @@
 
 #define PIF_JSON "/data/adb/pif.json"
 
-static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
+#define PIF_JSON_2 "/data/adb/modules/playintegrityfix/pif.json"
+
+static std::string FIRST_API_LEVEL, SECURITY_PATCH;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -29,7 +31,6 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!SECURITY_PATCH.empty()) {
 
             value = SECURITY_PATCH.c_str();
-            LOGD("Set '%s' to '%s'", name, value);
         }
 
     } else if (prop.ends_with("api_level")) {
@@ -37,20 +38,16 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!FIRST_API_LEVEL.empty()) {
 
             value = FIRST_API_LEVEL.c_str();
-            LOGD("Set '%s' to '%s'", name, value);
-        }
-
-    } else if (prop == "ro.build.id") {
-
-        if (!BUILD_ID.empty()) {
-
-            value = BUILD_ID.c_str();
-            LOGD("Set '%s' to '%s'", name, value);
         }
 
     } else if (prop == "sys.usb.state") {
 
         value = "none";
+    }
+
+    if (!prop.starts_with("debug") && !prop.starts_with("cache") && !prop.starts_with("persist")) {
+
+        LOGD("[%s] -> %s", name, value);
     }
 
     return o_callback(cookie, name, value, serial);
@@ -182,18 +179,6 @@ public:
             LOGD("JSON file doesn't contain SECURITY_PATCH key :(");
         }
 
-        if (json.contains("ID")) {
-
-            if (json["ID"].is_string()) {
-
-                BUILD_ID = json["ID"].get<std::string>();
-            }
-
-        } else {
-
-            LOGD("JSON file doesn't contain BUILD_ID key :(");
-        }
-
         doHook();
 
         LOGD("get system classloader");
@@ -271,6 +256,11 @@ static void companion(int fd) {
     delete[] dexBuffer;
 
     FILE *jsonFile = fopen(PIF_JSON, "r");
+
+    if (jsonFile == nullptr) {
+
+        jsonFile = fopen(PIF_JSON_2, "r");
+    }
 
     if (jsonFile) {
 
