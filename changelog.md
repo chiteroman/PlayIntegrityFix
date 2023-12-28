@@ -7,6 +7,6 @@ https://t.me/playintegrityfix
 Emergency update 🚨
 
 - Fix few bugs.
-- Using v15.6 fingerprint, so you can pass DEVICE.
+- Using v14.6 fingerprint, so you can pass DEVICE.
 
 MODULE WON'T PROVIDE MORE FINGERPRINTS WHEN GOOGLE BAN THIS ONE.
