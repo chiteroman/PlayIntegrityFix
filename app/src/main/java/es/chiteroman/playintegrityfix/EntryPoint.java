@@ -1,66 +1,58 @@
 package es.chiteroman.playintegrityfix;
 
 import android.os.Build;
-import android.util.JsonReader;
 import android.util.Log;
 
-import java.io.StringReader;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.lang.reflect.Field;
-import java.security.KeyStore;
-import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
 
-public class EntryPoint {
-    private static final Map<String, String> map = new HashMap<>();
+public final class EntryPoint {
+    private static JSONObject jsonObject = new JSONObject();
 
     public static void init(String json) {
 
-        try (JsonReader reader = new JsonReader(new StringReader(json))) {
-            reader.beginObject();
-            while (reader.hasNext()) {
-                String key = reader.nextName();
-                String value = reader.nextString();
-                map.put(key, value);
-            }
-            reader.endObject();
-        } catch (Exception e) {
-            LOG("Error parsing JSON: " + e);
+        try {
+            jsonObject = new JSONObject(json);
+        } catch (JSONException e) {
+            LOG("Couldn't parse JSON from Zygisk");
         }
 
-        LOG("Map info (keys and values):");
-        map.forEach((s, s2) -> LOG(String.format("[%s] -> %s", s, s2)));
+        boolean FORCE_BASIC_ATTESTATION = true;
+
+        if (jsonObject.has("FORCE_BASIC_ATTESTATION")) {
+            try {
+                FORCE_BASIC_ATTESTATION = jsonObject.getBoolean("FORCE_BASIC_ATTESTATION");
+            } catch (JSONException e) {
+                LOG("Couldn't parse FORCE_BASIC_ATTESTATION from JSON");
+            }
+            jsonObject.remove("FORCE_BASIC_ATTESTATION");
+        }
 
         spoofDevice();
-        spoofProvider();
+
+        if (FORCE_BASIC_ATTESTATION) spoofProvider();
     }
 
-    protected static void LOG(String msg) {
+    static void LOG(String msg) {
         Log.d("PIF/Java", msg);
     }
 
-    protected static void spoofDevice() {
-        map.forEach(EntryPoint::setFieldValue);
-    }
-
-    protected static boolean isDroidGuard() {
-        return Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(e -> e.getClassName().toLowerCase(Locale.US).contains("droidguard"));
+    static void spoofDevice() {
+        jsonObject.keys().forEachRemaining(s -> {
+            try {
+                Object value = jsonObject.get(s);
+                setFieldValue(s, value);
+            } catch (JSONException ignored) {
+            }
+        });
     }
 
     private static void spoofProvider() {
         try {
-            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-
-            Field field = keyStore.getClass().getDeclaredField("keyStoreSpi");
-
-            field.setAccessible(true);
-            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) field.get(keyStore);
-            field.setAccessible(false);
-
             Provider provider = Security.getProvider("AndroidKeyStore");
 
             Provider customProvider = new CustomProvider(provider);
@@ -70,14 +62,18 @@ public class EntryPoint {
 
             LOG("Spoof KeyStoreSpi and Provider done!");
 
-        } catch (Exception e) {
-            LOG("spoofProvider exception: " + e);
+        } catch (Throwable t) {
+            LOG("spoofProvider exception: " + t);
         }
     }
 
-    private static void setFieldValue(String name, String value) {
-        if (name == null || value == null || name.isEmpty() || value.isEmpty()) return;
+    private static void setFieldValue(String name, Object value) {
+        if (name == null || value == null || name.isEmpty()) return;
+
+        if (value instanceof String str) if (str.isEmpty() || str.isBlank()) return;
+
         Field field = null;
+
         try {
             field = Build.class.getDeclaredField(name);
         } catch (NoSuchFieldException e) {
@@ -87,16 +83,23 @@ public class EntryPoint {
                 LOG("Couldn't find field: " + e);
             }
         }
+
         if (field == null) return;
+
         field.setAccessible(true);
-        String oldValue = null;
         try {
-            oldValue = (String) field.get(null);
-            if (value.equals(oldValue)) return;
-            field.set(null, value);
+
+            Object oldValue = field.get(null);
+
+            if (!value.equals(oldValue)) {
+
+                field.set(null, value);
+                LOG("Set [" + name + "] field value to [" + value + "]");
+            }
+
         } catch (IllegalAccessException e) {
-            LOG("Couldn't get or set field: " + e);
+            LOG("Couldn't modify field :(");
         }
-        LOG(String.format("Field '%s' with value '%s' is now set to '%s'", name, oldValue, value));
+        field.setAccessible(false);
     }
 }

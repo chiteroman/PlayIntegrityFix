@@ -14,7 +14,8 @@ import java.util.Date;
 import java.util.Enumeration;
 
 public class CustomKeyStoreSpi extends KeyStoreSpi {
-    public static volatile KeyStoreSpi keyStoreSpi;
+    public static KeyStoreSpi keyStoreSpi;
+
 
     @Override
     public Key engineGetKey(String alias, char[] password) throws NoSuchAlgorithmException, UnrecoverableKeyException {
@@ -23,14 +24,8 @@ public class CustomKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
-
-        if (EntryPoint.isDroidGuard()) {
-
-            EntryPoint.LOG("engineGetCertificateChain call! Throw exception");
-            throw new UnsupportedOperationException();
-        }
-
-        return keyStoreSpi.engineGetCertificateChain(alias);
+        EntryPoint.LOG("Tried to get certificate chain, throwing exception!");
+        throw new UnsupportedOperationException();
     }
 
     @Override

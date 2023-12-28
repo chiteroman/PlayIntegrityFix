@@ -2,7 +2,7 @@ package es.chiteroman.playintegrityfix;
 
 import java.security.Provider;
 
-public class CustomProvider extends Provider {
+public final class CustomProvider extends Provider {
 
     public CustomProvider(Provider provider) {
         super(provider.getName(), provider.getVersion(), provider.getInfo());
@@ -14,7 +14,6 @@ public class CustomProvider extends Provider {
 
     @Override
     public synchronized Service getService(String type, String algorithm) {
-        EntryPoint.LOG("[SERVICE] Type: " + type + " | Algorithm: " + algorithm);
 
         EntryPoint.spoofDevice();
 

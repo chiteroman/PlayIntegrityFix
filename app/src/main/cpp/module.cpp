@@ -1,7 +1,6 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <filesystem>
 
 #include "zygisk.hpp"
 #include "dobby.h"
@@ -48,6 +47,10 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
             value = BUILD_ID.c_str();
             LOGD("Set '%s' to '%s'", name, value);
         }
+
+    } else if (prop == "sys.usb.state") {
+
+        value = "none";
     }
 
     return o_callback(cookie, name, value, serial);
@@ -87,6 +90,11 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
+        if (args->is_child_zygote && *args->is_child_zygote) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
         auto name = env->GetStringUTFChars(args->nice_name, nullptr);
 
         if (name && strncmp(name, "com.google.android.gms", 22) == 0) {
@@ -95,24 +103,39 @@ public:
 
             if (strcmp(name, "com.google.android.gms.unstable") == 0) {
 
-                auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-                dir = rawDir;
-                env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-
-                long size = dir.size();
-                bool done = false;
-
                 int fd = api->connectCompanion();
 
-                write(fd, &size, sizeof(long));
-                write(fd, dir.data(), size);
+                read(fd, &dexSize, sizeof(long));
 
-                read(fd, &done, sizeof(bool));
+                if (dexSize > 0) {
 
+                    dexBuffer = new unsigned char[dexSize];
+                    read(fd, dexBuffer, dexSize);
+
+                } else {
+
+                    LOGD("Couldn't load classes.dex file in memory!");
+                    api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+                    goto end;
+                }
+
+                read(fd, &jsonSize, sizeof(long));
+
+                if (jsonSize > 0) {
+
+                    jsonBuffer = new char[jsonSize];
+                    read(fd, jsonBuffer, jsonSize);
+
+                } else {
+
+                    LOGD("Couldn't load pif.json file in memory!");
+                    delete[] dexBuffer;
+                    api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+                    goto end;
+                }
+
+                end:
                 close(fd);
-
-                LOGD("Files copied: %d", done);
-
                 goto clear;
             }
         }
@@ -124,31 +147,10 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dir.empty()) return;
+        if (dexSize < 1 || jsonSize < 1 || dexBuffer == nullptr || jsonBuffer == nullptr) return;
 
-        std::string classesDex(dir + "/classes.dex");
-
-        FILE *dexFile = fopen(classesDex.c_str(), "rb");
-
-        if (dexFile == nullptr) {
-
-            LOGD("classes.dex doesn't exist... This is weird.");
-            dir.clear();
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        fclose(dexFile);
-
-        doHook();
-
-        std::string pifJson(dir + "/pif.json");
-
-        FILE *jsonFile = fopen(pifJson.c_str(), "r");
-
-        nlohmann::json json = nlohmann::json::parse(jsonFile, nullptr, false, true);
-
-        fclose(jsonFile);
+        std::string_view jsonStr(jsonBuffer, jsonSize);
+        nlohmann::json json = nlohmann::json::parse(jsonStr, nullptr, false, true);
 
         if (json.contains("FIRST_API_LEVEL")) {
 
@@ -180,19 +182,19 @@ public:
             LOGD("JSON file doesn't contain SECURITY_PATCH key :(");
         }
 
-        if (json.contains("BUILD_ID")) {
+        if (json.contains("ID")) {
 
-            if (json["BUILD_ID"].is_string()) {
+            if (json["ID"].is_string()) {
 
-                BUILD_ID = json["BUILD_ID"].get<std::string>();
+                BUILD_ID = json["ID"].get<std::string>();
             }
-
-            json.erase("BUILD_ID");
 
         } else {
 
             LOGD("JSON file doesn't contain BUILD_ID key :(");
         }
+
+        doHook();
 
         LOGD("get system classloader");
         auto clClass = env->FindClass("java/lang/ClassLoader");
@@ -201,11 +203,11 @@ public:
         auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
         LOGD("create class loader");
-        auto dexClClass = env->FindClass("dalvik/system/PathClassLoader");
+        auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
-                                          "(Ljava/lang/String;Ljava/lang/ClassLoader;)V");
-        auto dexStr = env->NewStringUTF(classesDex.c_str());
-        auto dexCl = env->NewObject(dexClClass, dexClInit, dexStr, systemClassLoader);
+                                          "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
+        auto buffer = env->NewDirectByteBuffer(dexBuffer, dexSize);
+        auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
         auto loadClass = env->GetMethodID(clClass, "loadClass",
@@ -220,7 +222,16 @@ public:
         auto str = env->NewStringUTF(json.dump().c_str());
         env->CallStaticVoidMethod(entryClass, entryInit, str);
 
-        dir.clear();
+        env->DeleteLocalRef(clClass);
+        env->DeleteLocalRef(dexClClass);
+        env->DeleteLocalRef(buffer);
+        env->DeleteLocalRef(dexCl);
+        env->DeleteLocalRef(entryClassName);
+        env->DeleteLocalRef(entryClassObj);
+        env->DeleteLocalRef(str);
+
+        delete[] dexBuffer;
+        delete[] jsonBuffer;
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -230,42 +241,53 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::string dir;
+    long dexSize = 0, jsonSize = 0;
+    unsigned char *dexBuffer = nullptr;
+    char *jsonBuffer = nullptr;
 };
 
 static void companion(int fd) {
+    long dexSize = 0, jsonSize = 0;
+    unsigned char *dexBuffer = nullptr;
+    char *jsonBuffer = nullptr;
 
-    long size = 0;
-    std::string dir;
+    FILE *dexFile = fopen(CLASSES_DEX, "rb");
 
-    read(fd, &size, sizeof(long));
+    if (dexFile) {
 
-    dir.resize(size);
+        fseek(dexFile, 0, SEEK_END);
+        dexSize = ftell(dexFile);
+        fseek(dexFile, 0, SEEK_SET);
 
-    read(fd, dir.data(), size);
+        dexBuffer = new unsigned char[dexSize];
+        fread(dexBuffer, 1, dexSize, dexFile);
 
-    LOGD("[ROOT] GMS dir: %s", dir.c_str());
+        fclose(dexFile);
+    }
 
-    std::string classesDex(dir + "/classes.dex");
-    std::string pifJson(dir + "/pif.json");
+    write(fd, &dexSize, sizeof(long));
+    write(fd, dexBuffer, dexSize);
 
-    bool a = std::filesystem::copy_file(CLASSES_DEX, classesDex,
-                                        std::filesystem::copy_options::overwrite_existing);
+    delete[] dexBuffer;
 
-    std::filesystem::permissions(classesDex, std::filesystem::perms::owner_read |
-                                             std::filesystem::perms::group_read |
-                                             std::filesystem::perms::others_read);
+    FILE *jsonFile = fopen(PIF_JSON, "r");
 
-    bool b = std::filesystem::copy_file(PIF_JSON, pifJson,
-                                        std::filesystem::copy_options::overwrite_existing);
+    if (jsonFile) {
 
-    std::filesystem::permissions(pifJson, std::filesystem::perms::owner_read |
-                                          std::filesystem::perms::group_read |
-                                          std::filesystem::perms::others_read);
+        fseek(jsonFile, 0, SEEK_END);
+        jsonSize = ftell(jsonFile);
+        fseek(jsonFile, 0, SEEK_SET);
 
-    bool done = a && b;
+        jsonBuffer = new char[jsonSize];
+        fread(jsonBuffer, 1, jsonSize, jsonFile);
 
-    write(fd, &done, sizeof(bool));
+        fclose(jsonFile);
+    }
+
+    write(fd, &jsonSize, sizeof(long));
+    write(fd, jsonBuffer, jsonSize);
+
+    delete[] jsonBuffer;
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

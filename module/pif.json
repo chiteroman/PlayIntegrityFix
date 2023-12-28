@@ -1,11 +1,12 @@
 {
- "PRODUCT": "",
- "DEVICE": "",
- "MANUFACTURER": "",
- "BRAND": "",
- "MODEL": "",
- "FINGERPRINT": "",
- "FIRST_API_LEVEL": 21,
- "SECURITY_PATCH": "",
- "BUILD_ID": ""
+    "PRODUCT": "",
+    "DEVICE": "",
+    "MANUFACTURER": "",
+    "BRAND": "",
+    "MODEL": "",
+    "FINGERPRINT": "",
+    "SECURITY_PATCH": "",
+    "ID": "",
+    "FIRST_API_LEVEL": 24,
+    "FORCE_BASIC_ATTESTATION": true
 }
