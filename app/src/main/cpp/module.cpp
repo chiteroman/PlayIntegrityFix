@@ -100,14 +100,15 @@ public:
 
             if (strcmp(name, "com.google.android.gms.unstable") == 0) {
 
+                long dexSize = 0, jsonSize = 0;
                 int fd = api->connectCompanion();
 
                 read(fd, &dexSize, sizeof(long));
 
                 if (dexSize > 0) {
 
-                    dexBuffer = new unsigned char[dexSize];
-                    read(fd, dexBuffer, dexSize);
+                    dexVector.resize(dexSize);
+                    read(fd, dexVector.data(), dexSize);
 
                 } else {
 
@@ -120,13 +121,13 @@ public:
 
                 if (jsonSize > 0) {
 
-                    jsonBuffer = new char[jsonSize];
-                    read(fd, jsonBuffer, jsonSize);
+                    jsonVector.resize(jsonSize);
+                    read(fd, jsonVector.data(), jsonSize);
 
                 } else {
 
                     LOGD("Couldn't load pif.json file in memory!");
-                    delete[] dexBuffer;
+                    dexVector.clear();
                     api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
                     goto end;
                 }
@@ -144,9 +145,9 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexSize < 1 || jsonSize < 1 || dexBuffer == nullptr || jsonBuffer == nullptr) return;
+        if (dexVector.empty() || jsonVector.empty()) return;
 
-        std::string_view jsonStr(jsonBuffer, jsonSize);
+        std::string jsonStr(jsonVector.cbegin(), jsonVector.cend());
         nlohmann::json json = nlohmann::json::parse(jsonStr, nullptr, false, true);
 
         if (json.contains("FIRST_API_LEVEL")) {
@@ -191,7 +192,7 @@ public:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(dexBuffer, dexSize);
+        auto buffer = env->NewDirectByteBuffer(dexVector.data(), dexVector.size());
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -207,16 +208,8 @@ public:
         auto str = env->NewStringUTF(json.dump().c_str());
         env->CallStaticVoidMethod(entryClass, entryInit, str);
 
-        env->DeleteLocalRef(clClass);
-        env->DeleteLocalRef(dexClClass);
-        env->DeleteLocalRef(buffer);
-        env->DeleteLocalRef(dexCl);
-        env->DeleteLocalRef(entryClassName);
-        env->DeleteLocalRef(entryClassObj);
-        env->DeleteLocalRef(str);
-
-        delete[] dexBuffer;
-        delete[] jsonBuffer;
+        dexVector.clear();
+        jsonVector.clear();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -226,15 +219,12 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    long dexSize = 0, jsonSize = 0;
-    unsigned char *dexBuffer = nullptr;
-    char *jsonBuffer = nullptr;
+    std::vector<char> dexVector, jsonVector;
 };
 
 static void companion(int fd) {
     long dexSize = 0, jsonSize = 0;
-    unsigned char *dexBuffer = nullptr;
-    char *jsonBuffer = nullptr;
+    std::vector<char> dexVector, jsonVector;
 
     FILE *dexFile = fopen(CLASSES_DEX, "rb");
 
@@ -244,16 +234,14 @@ static void companion(int fd) {
         dexSize = ftell(dexFile);
         fseek(dexFile, 0, SEEK_SET);
 
-        dexBuffer = new unsigned char[dexSize];
-        fread(dexBuffer, 1, dexSize, dexFile);
+        dexVector.resize(dexSize);
+        fread(dexVector.data(), 1, dexSize, dexFile);
 
         fclose(dexFile);
     }
 
     write(fd, &dexSize, sizeof(long));
-    write(fd, dexBuffer, dexSize);
-
-    delete[] dexBuffer;
+    write(fd, dexVector.data(), dexSize);
 
     FILE *jsonFile = fopen(PIF_JSON, "r");
 
@@ -268,16 +256,14 @@ static void companion(int fd) {
         jsonSize = ftell(jsonFile);
         fseek(jsonFile, 0, SEEK_SET);
 
-        jsonBuffer = new char[jsonSize];
-        fread(jsonBuffer, 1, jsonSize, jsonFile);
+        jsonVector.resize(jsonSize);
+        fread(jsonVector.data(), 1, jsonSize, jsonFile);
 
         fclose(jsonFile);
     }
 
     write(fd, &jsonSize, sizeof(long));
-    write(fd, jsonBuffer, jsonSize);
-
-    delete[] jsonBuffer;
+    write(fd, jsonVector.data(), jsonSize);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
