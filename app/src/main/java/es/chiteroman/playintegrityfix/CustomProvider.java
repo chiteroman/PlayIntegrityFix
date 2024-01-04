@@ -14,8 +14,9 @@ public final class CustomProvider extends Provider {
 
     @Override
     public synchronized Service getService(String type, String algorithm) {
+        EntryPoint.LOG(String.format("[Service] Type: '%s' | Algorithm: '%s'", type, algorithm));
 
-        EntryPoint.spoofDevice();
+        if ("KeyStore".equals(type)) EntryPoint.spoofDevice();
 
         return super.getService(type, algorithm);
     }

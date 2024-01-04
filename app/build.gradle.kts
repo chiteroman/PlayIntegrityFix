@@ -14,6 +14,7 @@ android {
 
     packaging {
         jniLibs {
+            excludes += "**/liblog.so"
             excludes += "**/libdobby.so"
         }
     }
@@ -22,19 +23,22 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 15200
+        versionName = "v15.2"
 
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
                 arguments += "-DCMAKE_BUILD_TYPE=Release"
+                arguments += "-DCMAKE_CXX_STANDARD=20"
+                arguments += "-DCMAKE_CXX_STANDARD_REQUIRED=True"
+                arguments += "-DCMAKE_CXX_EXTENSIONS=False"
+                arguments += "-DCMAKE_CXX_VISIBILITY_PRESET=hidden"
+                arguments += "-DCMAKE_VISIBILITY_INLINES_HIDDEN=True"
+                arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
 
-                cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
-                cppFlags += "-fvisibility=hidden"
-                cppFlags += "-fvisibility-inlines-hidden"
             }
         }
     }
@@ -64,7 +68,26 @@ dependencies {
     implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
 
+tasks.register("updateModuleProp") {
+    doLast {
+        val versionName = project.android.defaultConfig.versionName
+        val versionCode = project.android.defaultConfig.versionCode
+
+        val modulePropFile = project.rootDir.resolve("module/module.prop")
+
+        var content = modulePropFile.readText()
+
+        content = content.replace(Regex("version=.*"), "version=$versionName")
+        content = content.replace(Regex("versionCode=.*"), "versionCode=$versionCode")
+
+        modulePropFile.writeText(content)
+    }
+}
+
+
 tasks.register("copyFiles") {
+    dependsOn("updateModuleProp")
+
     doLast {
         val moduleFolder = project.rootDir.resolve("module")
         val dexFile = project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
@@ -83,12 +106,12 @@ tasks.register("copyFiles") {
 tasks.register<Zip>("zip") {
     dependsOn("copyFiles")
 
-    archiveFileName.set("PlayIntegrityFix.zip")
+    archiveFileName.set("PlayIntegrityFix_${project.android.defaultConfig.versionName}.zip")
     destinationDirectory.set(project.rootDir.resolve("out"))
 
     from(project.rootDir.resolve("module"))
 }
 
 afterEvaluate {
-    tasks["assembleRelease"].finalizedBy("copyFiles", "zip")
+    tasks["assembleRelease"].finalizedBy("updateModuleProp", "copyFiles", "zip")
 }
