@@ -15,45 +15,7 @@ import java.security.Security;
 public final class EntryPoint {
     private static JSONObject jsonObject = new JSONObject();
 
-    public static void init(String json) {
-
-        try {
-            jsonObject = new JSONObject(json);
-        } catch (JSONException e) {
-            LOG("Couldn't parse JSON from Zygisk");
-        }
-
-        boolean FORCE_BASIC_ATTESTATION = true;
-
-        if (jsonObject.has("FORCE_BASIC_ATTESTATION")) {
-            try {
-                FORCE_BASIC_ATTESTATION = jsonObject.getBoolean("FORCE_BASIC_ATTESTATION");
-            } catch (JSONException e) {
-                LOG("Couldn't parse FORCE_BASIC_ATTESTATION from JSON");
-            }
-            jsonObject.remove("FORCE_BASIC_ATTESTATION");
-        }
-
-        spoofDevice();
-
-        if (FORCE_BASIC_ATTESTATION) spoofProvider();
-    }
-
-    static void LOG(String msg) {
-        Log.d("PIF/Java", msg);
-    }
-
-    static void spoofDevice() {
-        jsonObject.keys().forEachRemaining(s -> {
-            try {
-                Object value = jsonObject.get(s);
-                setFieldValue(s, value);
-            } catch (JSONException ignored) {
-            }
-        });
-    }
-
-    private static void spoofProvider() {
+    static {
         try {
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
             keyStore.load(null);
@@ -75,6 +37,31 @@ public final class EntryPoint {
         } catch (Throwable t) {
             LOG("spoofProvider exception: " + t);
         }
+    }
+
+    public static void init(String json) {
+
+        try {
+            jsonObject = new JSONObject(json);
+        } catch (JSONException e) {
+            LOG("Couldn't parse JSON from Zygisk");
+        }
+
+        spoofDevice();
+    }
+
+    static void LOG(String msg) {
+        Log.d("PIF/Java", msg);
+    }
+
+    static void spoofDevice() {
+        jsonObject.keys().forEachRemaining(s -> {
+            try {
+                Object value = jsonObject.get(s);
+                setFieldValue(s, value);
+            } catch (JSONException ignored) {
+            }
+        });
     }
 
     private static void setFieldValue(String name, Object value) {

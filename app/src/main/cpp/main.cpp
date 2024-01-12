@@ -1,8 +1,6 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <fstream>
-#include <filesystem>
 #include "zygisk.hpp"
 #include "dobby.h"
 #include "json.hpp"
@@ -53,6 +51,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     } else if (prop == "sys.usb.state") {
 
         value = "none";
+
     }
 
     if (!prop.starts_with("debug") && !prop.starts_with("cache") && !prop.starts_with("persist")) {
@@ -104,24 +103,21 @@ public:
             return;
         }
 
-        std::string_view process(name);
-
-        bool isGms = process.starts_with("com.google.android.gms");
-        bool isGmsUnstable = process == "com.google.android.gms.unstable";
-
-        env->ReleaseStringUTFChars(args->nice_name, name);
-
-        if (!isGms) {
+        if (strncmp(name, "com.google.android.gms", 22) != 0) {
+            env->ReleaseStringUTFChars(args->nice_name, name);
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (!isGmsUnstable) {
+        if (strcmp(name, "com.google.android.gms.unstable") != 0) {
+            env->ReleaseStringUTFChars(args->nice_name, name);
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
+
+        env->ReleaseStringUTFChars(args->nice_name, name);
 
         long dexSize = 0, jsonSize = 0;
 
@@ -130,15 +126,18 @@ public:
         read(fd, &dexSize, sizeof(long));
         read(fd, &jsonSize, sizeof(long));
 
+        LOGD("Dex file size: %ld", dexSize);
+        LOGD("Json file size: %ld", jsonSize);
+
         vector.resize(dexSize);
         read(fd, vector.data(), dexSize);
 
-        char jsonBufer[jsonSize];
-        read(fd, jsonBufer, jsonSize);
+        std::vector<char> jsonVector(jsonSize);
+        read(fd, jsonVector.data(), jsonSize);
 
         close(fd);
 
-        std::string_view jsonStr(jsonBufer, jsonSize);
+        std::string_view jsonStr(jsonVector.cbegin(), jsonVector.cend());
         json = nlohmann::json::parse(jsonStr, nullptr, false, true);
 
         if (json.contains("FIRST_API_LEVEL")) {
@@ -238,33 +237,37 @@ private:
 };
 
 static void companion(int fd) {
-    std::ifstream dexFile(CLASSES_DEX, std::ios::in | std::ios::binary);
+    long dexSize = 0, jsonSize = 0;
+    std::vector<char> dexVector, jsonVector;
 
-    if (!dexFile) {
-        long i = 0;
-        write(fd, &i, sizeof(i));
-        return;
+    FILE *dexFile = fopen(CLASSES_DEX, "rb");
+
+    if (dexFile) {
+
+        fseek(dexFile, 0, SEEK_END);
+        dexSize = ftell(dexFile);
+        fseek(dexFile, 0, SEEK_SET);
+
+        dexVector.resize(dexSize);
+        fread(dexVector.data(), 1, dexSize, dexFile);
+
+        fclose(dexFile);
     }
 
-    std::vector<char> dexVector((std::istreambuf_iterator<char>(dexFile)),
-                                std::istreambuf_iterator<char>());
-    long dexSize = dexVector.size();
+    FILE *jsonFile = fopen(PIF_JSON, "rb");
+    if (jsonFile == nullptr) jsonFile = fopen(PIF_JSON_2, "rb");
 
-    std::ifstream jsonFile;
+    if (jsonFile) {
 
-    if (std::filesystem::exists(PIF_JSON)) {
-        jsonFile = std::ifstream(PIF_JSON, std::ios::in);
-    } else if (std::filesystem::exists(PIF_JSON_2)) {
-        jsonFile = std::ifstream(PIF_JSON_2, std::ios::in);
-    } else {
-        long i = 0;
-        write(fd, &i, sizeof(i));
-        return;
+        fseek(jsonFile, 0, SEEK_END);
+        jsonSize = ftell(jsonFile);
+        fseek(jsonFile, 0, SEEK_SET);
+
+        jsonVector.resize(jsonSize);
+        fread(jsonVector.data(), 1, jsonSize, jsonFile);
+
+        fclose(jsonFile);
     }
-
-    std::vector<char> jsonVector((std::istreambuf_iterator<char>(jsonFile)),
-                                 std::istreambuf_iterator<char>());
-    long jsonSize = jsonVector.size();
 
     write(fd, &dexSize, sizeof(long));
     write(fd, &jsonSize, sizeof(long));

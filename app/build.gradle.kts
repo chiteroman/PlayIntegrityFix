@@ -8,10 +8,6 @@ android {
     ndkVersion = "26.1.10909125"
     buildToolsVersion = "34.0.0"
 
-    buildFeatures {
-        prefab = true
-    }
-
     packaging {
         jniLibs {
             excludes += "**/liblog.so"
@@ -27,18 +23,8 @@ android {
         versionName = "v15.2"
 
         externalNativeBuild {
-            cmake {
-                arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=Release"
-                arguments += "-DCMAKE_CXX_STANDARD=20"
-                arguments += "-DCMAKE_CXX_STANDARD_REQUIRED=True"
-                arguments += "-DCMAKE_CXX_EXTENSIONS=False"
-                arguments += "-DCMAKE_CXX_VISIBILITY_PRESET=hidden"
-                arguments += "-DCMAKE_VISIBILITY_INLINES_HIDDEN=True"
-                arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
-
-                cppFlags += "-fno-exceptions"
-                cppFlags += "-fno-rtti"
+            ndk {
+                jobs = Runtime.getRuntime().availableProcessors()
             }
         }
     }
@@ -57,15 +43,10 @@ android {
     }
 
     externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+        ndkBuild {
+            path = file("src/main/cpp/Android.mk")
         }
     }
-}
-
-dependencies {
-    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
 
 tasks.register("updateModuleProp") {

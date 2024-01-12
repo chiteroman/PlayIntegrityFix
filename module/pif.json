@@ -7,6 +7,5 @@
     "FINGERPRINT": "acer/c01_ww/acer_c01:7.1.1/NMF26F/1521514970:user/release-keys",
     "SECURITY_PATCH": "2018-04-01",
     "FIRST_API_LEVEL": 24,
-    "ID": "NMF26F",
-    "FORCE_BASIC_ATTESTATION": true
+    "ID": "NMF26F"
 }
