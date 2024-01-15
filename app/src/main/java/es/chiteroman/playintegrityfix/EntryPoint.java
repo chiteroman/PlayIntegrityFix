@@ -17,37 +17,38 @@ public final class EntryPoint {
 
     static {
         try {
-            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-            keyStore.load(null);
-
-            Field f = keyStore.getClass().getDeclaredField("keyStoreSpi");
-            f.setAccessible(true);
-            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) f.get(keyStore);
-            f.setAccessible(false);
-
-            Provider provider = Security.getProvider("AndroidKeyStore");
-
-            Provider customProvider = new CustomProvider(provider);
-
-            Security.removeProvider("AndroidKeyStore");
-            Security.insertProviderAt(customProvider, 1);
-
-            LOG("Spoof KeyStoreSpi and Provider done!");
-
+            spoofProvider();
         } catch (Throwable t) {
             LOG("spoofProvider exception: " + t);
         }
     }
 
-    public static void init(String json) {
+    private static void spoofProvider() throws Exception {
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        keyStore.load(null);
 
+        Field f = keyStore.getClass().getDeclaredField("keyStoreSpi");
+        f.setAccessible(true);
+        CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) f.get(keyStore);
+        f.setAccessible(false);
+
+        Provider provider = Security.getProvider("AndroidKeyStore");
+
+        Provider customProvider = new CustomProvider(provider);
+
+        Security.removeProvider("AndroidKeyStore");
+        Security.insertProviderAt(customProvider, 1);
+
+        LOG("Spoof KeyStoreSpi and Provider done!");
+    }
+
+    public static void init(String json) {
         try {
             jsonObject = new JSONObject(json);
+            spoofDevice();
         } catch (JSONException e) {
             LOG("Couldn't parse JSON from Zygisk");
         }
-
-        spoofDevice();
     }
 
     static void LOG(String msg) {
@@ -69,6 +70,26 @@ public final class EntryPoint {
 
         if (value instanceof String str) if (str.isEmpty() || str.isBlank()) return;
 
+        Field field = getField(name);
+
+        if (field == null) return;
+
+        field.setAccessible(true);
+        try {
+            Object oldValue = field.get(null);
+
+            if (!value.equals(oldValue)) {
+                field.set(null, value);
+                LOG("Set [" + name + "] field value to [" + value + "]");
+            }
+
+        } catch (IllegalAccessException e) {
+            LOG("Couldn't modify field: " + e);
+        }
+        field.setAccessible(false);
+    }
+
+    private static Field getField(String name) {
         Field field = null;
 
         try {
@@ -81,22 +102,6 @@ public final class EntryPoint {
             }
         }
 
-        if (field == null) return;
-
-        field.setAccessible(true);
-        try {
-
-            Object oldValue = field.get(null);
-
-            if (!value.equals(oldValue)) {
-
-                field.set(null, value);
-                LOG("Set [" + name + "] field value to [" + value + "]");
-            }
-
-        } catch (IllegalAccessException e) {
-            LOG("Couldn't modify field: " + e);
-        }
-        field.setAccessible(false);
+        return field;
     }
 }
