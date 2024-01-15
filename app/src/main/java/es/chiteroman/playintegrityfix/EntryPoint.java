@@ -66,7 +66,7 @@ public final class EntryPoint {
     }
 
     private static void setFieldValue(String name, Object value) {
-        if (name == null  value == null  name.isEmpty()) return;
+        if (name == null || value == null || name.isEmpty()) return;
 
         if (value instanceof String str) if (str.isEmpty() || str.isBlank()) return;
 
