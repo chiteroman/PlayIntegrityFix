@@ -1,12 +1,7 @@
-We have a Telegram channel!
+We have a Telegram group!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v15.1
+# v15.2
 
-Emergency update 🚨
-
-- Fix few bugs.
-- Using v14.6 fingerprint, so you can pass DEVICE.
-
-MODULE WON'T PROVIDE MORE FINGERPRINTS WHEN GOOGLE BAN THIS ONE.
+Fingerprint is not included.

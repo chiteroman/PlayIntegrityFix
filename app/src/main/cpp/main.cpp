@@ -1,5 +1,4 @@
 #include <android/log.h>
-#include <sys/system_properties.h>
 #include <unistd.h>
 #include "zygisk.hpp"
 #include "dobby.h"
@@ -11,19 +10,15 @@
 
 #define PIF_JSON "/data/adb/pif.json"
 
-#define PIF_JSON_2 "/data/adb/modules/playintegrityfix/pif.json"
-
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
+static T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr ||
-        !callbacks.contains(cookie))
-        return;
+    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
     std::string_view prop(name);
 
@@ -59,17 +54,17 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         LOGD("[%s] -> %s", name, value);
     }
 
-    return callbacks[cookie](cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
-static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
+static void (*o_system_property_read_callback)(const void *, T_Callback, void *);
 
 static void
-my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
+my_system_property_read_callback(const void *pi, T_Callback callback, void *cookie) {
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    callbacks[cookie] = callback;
+    o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -82,8 +77,8 @@ static void doHook() {
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
     DobbyHook(
             handle,
-            reinterpret_cast<dobby_dummy_func_t>(my_system_property_read_callback),
-            reinterpret_cast<dobby_dummy_func_t *>(&o_system_property_read_callback)
+            (dobby_dummy_func_t) my_system_property_read_callback,
+            (dobby_dummy_func_t *) &o_system_property_read_callback
     );
 }
 
@@ -98,48 +93,93 @@ public:
 
         auto name = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        if (name == nullptr) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        if (strncmp(name, "com.google.android.gms", 22) != 0) {
-            env->ReleaseStringUTFChars(args->nice_name, name);
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
-
-        if (strcmp(name, "com.google.android.gms.unstable") != 0) {
-            env->ReleaseStringUTFChars(args->nice_name, name);
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
+        bool isGms = memcmp(name, "com.google.android.gms", 22) == 0;
+        bool isGmsUnstable = memcmp(name, "com.google.android.gms.unstable", 31) == 0;
 
         env->ReleaseStringUTFChars(args->nice_name, name);
 
-        long dexSize = 0, jsonSize = 0;
+        if (isGms) api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        int fd = api->connectCompanion();
+        if (isGmsUnstable) {
+            long dexSize = 0, jsonSize = 0;
 
-        read(fd, &dexSize, sizeof(long));
-        read(fd, &jsonSize, sizeof(long));
+            int fd = api->connectCompanion();
 
-        LOGD("Dex file size: %ld", dexSize);
-        LOGD("Json file size: %ld", jsonSize);
+            read(fd, &dexSize, sizeof(long));
+            read(fd, &jsonSize, sizeof(long));
 
-        vector.resize(dexSize);
-        read(fd, vector.data(), dexSize);
+            LOGD("Dex file size: %ld", dexSize);
+            LOGD("Json file size: %ld", jsonSize);
 
-        std::vector<char> jsonVector(jsonSize);
-        read(fd, jsonVector.data(), jsonSize);
+            vector.resize(dexSize);
+            read(fd, vector.data(), dexSize);
 
-        close(fd);
+            std::vector<char> jsonVector(jsonSize);
+            read(fd, jsonVector.data(), jsonSize);
 
-        std::string_view jsonStr(jsonVector.cbegin(), jsonVector.cend());
-        json = nlohmann::json::parse(jsonStr, nullptr, false, true);
+            close(fd);
 
+            std::string_view jsonStr(jsonVector.cbegin(), jsonVector.cend());
+            json = nlohmann::json::parse(jsonStr, nullptr, false, true);
+
+            parseJson();
+
+            return; // We can't dlclose lib because of the hook
+        }
+
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+    }
+
+    void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
+        if (vector.empty() || json.empty()) return;
+
+        doHook();
+
+        injectDex();
+
+        vector.clear();
+        json.clear();
+    }
+
+    void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+    }
+
+private:
+    zygisk::Api *api = nullptr;
+    JNIEnv *env = nullptr;
+    std::vector<char> vector;
+    nlohmann::json json;
+
+    void injectDex() {
+        LOGD("get system classloader");
+        auto clClass = env->FindClass("java/lang/ClassLoader");
+        auto getSystemClassLoader = env->GetStaticMethodID(clClass, "getSystemClassLoader",
+                                                           "()Ljava/lang/ClassLoader;");
+        auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
+
+        LOGD("create class loader");
+        auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
+        auto dexClInit = env->GetMethodID(dexClClass, "<init>",
+                                          "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
+        auto buffer = env->NewDirectByteBuffer(vector.data(), vector.size());
+        auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
+
+        LOGD("load class");
+        auto loadClass = env->GetMethodID(clClass, "loadClass",
+                                          "(Ljava/lang/String;)Ljava/lang/Class;");
+        auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
+        auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
+
+        auto entryClass = (jclass) entryClassObj;
+
+        LOGD("call init");
+        auto entryInit = env->GetStaticMethodID(entryClass, "init", "(Ljava/lang/String;)V");
+        auto str = env->NewStringUTF(json.dump().c_str());
+        env->CallStaticVoidMethod(entryClass, entryInit, str);
+    }
+
+    void parseJson() {
         if (json.contains("FIRST_API_LEVEL")) {
 
             if (json["FIRST_API_LEVEL"].is_number_integer()) {
@@ -189,51 +229,6 @@ public:
             LOGD("JSON file doesn't contain ID/BUILD_ID keys :(");
         }
     }
-
-    void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (vector.empty() || json.empty()) return;
-
-        doHook();
-
-        LOGD("get system classloader");
-        auto clClass = env->FindClass("java/lang/ClassLoader");
-        auto getSystemClassLoader = env->GetStaticMethodID(clClass, "getSystemClassLoader",
-                                                           "()Ljava/lang/ClassLoader;");
-        auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
-
-        LOGD("create class loader");
-        auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
-        auto dexClInit = env->GetMethodID(dexClClass, "<init>",
-                                          "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(vector.data(), vector.size());
-        auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
-
-        LOGD("load class");
-        auto loadClass = env->GetMethodID(clClass, "loadClass",
-                                          "(Ljava/lang/String;)Ljava/lang/Class;");
-        auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
-        auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
-
-        auto entryClass = (jclass) entryClassObj;
-
-        LOGD("call init");
-        auto entryInit = env->GetStaticMethodID(entryClass, "init", "(Ljava/lang/String;)V");
-        auto str = env->NewStringUTF(json.dump().c_str());
-        env->CallStaticVoidMethod(entryClass, entryInit, str);
-
-        vector.clear();
-        json.clear();
-    }
-
-    void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-    }
-
-private:
-    zygisk::Api *api = nullptr;
-    JNIEnv *env = nullptr;
-    std::vector<char> vector;
-    nlohmann::json json;
 };
 
 static void companion(int fd) {
@@ -254,8 +249,7 @@ static void companion(int fd) {
         fclose(dexFile);
     }
 
-    FILE *jsonFile = fopen(PIF_JSON, "rb");
-    if (jsonFile == nullptr) jsonFile = fopen(PIF_JSON_2, "rb");
+    FILE *jsonFile = fopen(PIF_JSON, "r");
 
     if (jsonFile) {
 
