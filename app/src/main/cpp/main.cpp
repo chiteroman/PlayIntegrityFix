@@ -231,44 +231,47 @@ private:
     }
 };
 
+static std::vector<char> readFile(const char* filename, long& size) {
+    std::vector<char> vector;
+    FILE *file = fopen(filename, "rb");
+
+    if (file) {
+        fseek(file, 0, SEEK_END);
+        size = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        vector.resize(size);
+        size_t readSize = fread(vector.data(), 1, size, file);
+        if (readSize != size) {
+            LOGD("Error reading file: %s", filename);
+            vector.clear();
+        }
+
+        fclose(file);
+    } else {
+        LOGD("Error opening file: %s", filename);
+    }
+
+    return vector;
+}
+
 static void companion(int fd) {
     long dexSize = 0, jsonSize = 0;
-    std::vector<char> dexVector, jsonVector;
-
-    FILE *dexFile = fopen(CLASSES_DEX, "rb");
-
-    if (dexFile) {
-
-        fseek(dexFile, 0, SEEK_END);
-        dexSize = ftell(dexFile);
-        fseek(dexFile, 0, SEEK_SET);
-
-        dexVector.resize(dexSize);
-        fread(dexVector.data(), 1, dexSize, dexFile);
-
-        fclose(dexFile);
-    }
-
-    FILE *jsonFile = fopen(PIF_JSON, "r");
-
-    if (jsonFile) {
-
-        fseek(jsonFile, 0, SEEK_END);
-        jsonSize = ftell(jsonFile);
-        fseek(jsonFile, 0, SEEK_SET);
-
-        jsonVector.resize(jsonSize);
-        fread(jsonVector.data(), 1, jsonSize, jsonFile);
-
-        fclose(jsonFile);
-    }
+    std::vector<char> dexVector = readFile(CLASSES_DEX, dexSize);
+    std::vector<char> jsonVector = readFile(PIF_JSON, jsonSize);
 
     write(fd, &dexSize, sizeof(long));
     write(fd, &jsonSize, sizeof(long));
 
-    write(fd, dexVector.data(), dexSize);
-    write(fd, jsonVector.data(), jsonSize);
+    if (!dexVector.empty()) {
+        write(fd, dexVector.data(), dexSize);
+    }
+
+    if (!jsonVector.empty()) {
+        write(fd, jsonVector.data(), jsonSize);
+    }
 }
+
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
 
