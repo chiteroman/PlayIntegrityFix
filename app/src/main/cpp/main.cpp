@@ -8,7 +8,7 @@
 
 #define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define PIF_JSON "/data/adb/modules/playintegrityfix/pif.json"
+#define PIF_JSON "/data/adb/pif.json"
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
