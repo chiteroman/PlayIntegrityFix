@@ -9,9 +9,12 @@ import org.json.JSONObject;
 import java.lang.reflect.Field;
 import java.security.Provider;
 import java.security.Security;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class EntryPoint {
     private static JSONObject jsonObject = new JSONObject();
+    private static final Map<String, Field> fieldCache = new HashMap<>();
 
     static {
         Provider provider = Security.getProvider("AndroidKeyStore");
@@ -25,12 +28,11 @@ public final class EntryPoint {
     }
 
     public static void init(String json) {
-
         try {
             jsonObject = new JSONObject(json);
             spoofFields();
         } catch (JSONException e) {
-            LOG("Couldn't parse JSON from Zygisk");
+            LOG("Couldn't parse JSON from Zygisk: " + Log.getStackTraceString(e));
         }
     }
 
@@ -39,7 +41,8 @@ public final class EntryPoint {
             try {
                 Object value = jsonObject.get(s);
                 setFieldValue(s, value);
-            } catch (JSONException ignored) {
+            } catch (JSONException e) {
+                LOG("JSON error for key " + s + ": " + Log.getStackTraceString(e));
             }
         });
     }
@@ -47,12 +50,13 @@ public final class EntryPoint {
     private static void setFieldValue(String name, Object value) {
         if (name == null || value == null || name.isEmpty()) return;
 
-        if (value instanceof String str) if (str.isEmpty() || str.isBlank()) return;
+        if (value instanceof String && ((String) value).trim().isEmpty()) return;
 
         Field field = getField(name);
 
         if (field == null) return;
 
+        boolean wasAccessible = field.isAccessible();
         field.setAccessible(true);
         try {
             Object oldValue = field.get(null);
@@ -63,12 +67,19 @@ public final class EntryPoint {
             }
 
         } catch (IllegalAccessException e) {
-            LOG("Couldn't modify field: " + e);
+            LOG("Couldn't modify field: " + Log.getStackTraceString(e));
+        } finally {
+            if (!wasAccessible) {
+                field.setAccessible(false);
+            }
         }
-        field.setAccessible(false);
     }
 
     private static Field getField(String name) {
+        if (fieldCache.containsKey(name)) {
+            return fieldCache.get(name);
+        }
+
         Field field = null;
 
         try {
@@ -79,6 +90,10 @@ public final class EntryPoint {
             } catch (NoSuchFieldException ex) {
                 LOG("Couldn't find field: " + e);
             }
+        }
+
+        if (field != null) {
+            fieldCache.put(name, field);
         }
 
         return field;
