@@ -1,5 +1,6 @@
 #include <android/log.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include "zygisk.hpp"
 #include "dobby.h"
 #include "json.hpp"
@@ -9,6 +10,12 @@
 #define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PIF_JSON "/data/adb/pif.json"
+
+static enum PIF_Request {
+    GET_GMS_UID,
+    GET_CLASSES_DEX,
+    END
+};
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
@@ -90,20 +97,23 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        int gms_uid = -1, fd = AskCompanion(PIF_Request::GET_GMS_UID);
+        read(fd, &gms_uid, sizeof(gms_uid));
+        close(fd);
 
-        auto name = env->GetStringUTFChars(args->nice_name, nullptr);
+        if ((args->uid % 100000) == gms_uid) {
 
-        bool isGms = memcmp(name, "com.google.android.gms", 22) == 0;
-        bool isGmsUnstable = memcmp(name, "com.google.android.gms.unstable", 31) == 0;
+            auto name = env->GetStringUTFChars(args->nice_name, nullptr);
+            bool should_load_dex = memcmp(name, "com.google.android.gms.unstable", 31) == 0;
+            env->ReleaseStringUTFChars(args->nice_name, name);
 
-        env->ReleaseStringUTFChars(args->nice_name, name);
+            api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (isGms) api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+            if (!should_load_dex) goto unload;
 
-        if (isGmsUnstable) {
             long dexSize = 0, jsonSize = 0;
 
-            int fd = api->connectCompanion();
+            fd = AskCompanion(PIF_Request::GET_CLASSES_DEX);
 
             read(fd, &dexSize, sizeof(long));
             read(fd, &jsonSize, sizeof(long));
@@ -127,6 +137,7 @@ public:
             return; // We can't dlclose lib because of the hook
         }
 
+        unload:
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
@@ -150,6 +161,13 @@ private:
     JNIEnv *env = nullptr;
     std::vector<char> vector;
     nlohmann::json json;
+
+    int AskCompanion(int req) {
+        int fd = api->connectCompanion();
+        if (fd < 0) return -1;
+        write(fd, &req, sizeof(req));
+        return fd;
+    }
 
     void injectDex() {
         LOGD("get system classloader");
@@ -231,7 +249,7 @@ private:
     }
 };
 
-static void companion(int fd) {
+static void request_dex(int fd) {
     long dexSize = 0, jsonSize = 0;
     std::vector<char> dexVector, jsonVector;
 
@@ -268,6 +286,25 @@ static void companion(int fd) {
 
     write(fd, dexVector.data(), dexSize);
     write(fd, jsonVector.data(), jsonSize);
+}
+
+static void get_gms_uid(int fd) {
+    struct stat st{};
+    int uid = -1;
+    if (!stat("/data/data/com.google.android.gms", &st))
+        uid = st.st_uid;
+    write(fd, &uid, sizeof(uid));
+}
+
+static void companion(int fd) {
+    int req = -1;
+    read(fd, &req, sizeof(req));
+    switch (req) {
+        case PIF_Request::GET_GMS_UID:
+            return get_gms_uid(fd);
+        case PIF_Request::GET_CLASSES_DEX:
+            return request_dex(fd);
+    }
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
