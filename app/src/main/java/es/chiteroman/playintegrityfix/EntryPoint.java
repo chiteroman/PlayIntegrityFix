@@ -9,9 +9,12 @@ import org.json.JSONObject;
 import java.lang.reflect.Field;
 import java.security.Provider;
 import java.security.Security;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class EntryPoint {
     private static JSONObject jsonObject = new JSONObject();
+    private static final Map<String, Field> fieldCache = new HashMap<>();
 
     static {
         Provider provider = Security.getProvider("AndroidKeyStore");
@@ -25,7 +28,6 @@ public final class EntryPoint {
     }
 
     public static void init(String json) {
-
         try {
             jsonObject = new JSONObject(json);
             spoofFields();
@@ -69,6 +71,10 @@ public final class EntryPoint {
     }
 
     private static Field getField(String name) {
+        if (fieldCache.containsKey(name)) {
+            return fieldCache.get(name);
+        }
+
         Field field = null;
 
         try {
@@ -79,6 +85,10 @@ public final class EntryPoint {
             } catch (NoSuchFieldException ex) {
                 LOG("Couldn't find field: " + e);
             }
+        }
+
+        if (field != null) {
+            fieldCache.put(name, field);
         }
 
         return field;
