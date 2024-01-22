@@ -2,6 +2,8 @@ We have a Telegram group!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v15.2
+# v15.3
 
-Fingerprint is not included.
+- Migrated from Dobby to ShadowHook (again)
+- Update code logic.
+- Fixed few bugs.
