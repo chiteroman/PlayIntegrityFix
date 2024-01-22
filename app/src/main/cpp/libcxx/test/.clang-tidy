@@ -1,5 +1,0 @@
-InheritParentConfig: true
-
-CheckOptions:
-  - key:   readability-identifier-naming.ParameterPrefix
-    value: ""
