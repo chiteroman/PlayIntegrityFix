@@ -1,0 +1,39 @@
+# This testing configuration handles running the test suite against LLVM's libc++
+# using a shared library and an Android-specific rpath.
+
+lit_config.load_config(config, '@CMAKE_CURRENT_BINARY_DIR@/cmake-bridge.cfg')
+
+import re
+
+# Allow overriding the target API level for each test run. (e.g. Build libc++
+# against an old API, but build the tests against a newer API.)
+target_api = lit_config.params.get('target_api')
+if target_api is not None:
+    config.target_triple = re.sub('\d+$', '', config.target_triple) + str(target_api)
+
+config.substitutions.append(('%{flags}', ''))
+config.substitutions.append(('%{compile_flags}',
+    '-nostdinc++ -I %{include} -I %{target-include} -I %{libcxx}/test/support'
+))
+
+config.substitutions.append(('%{link_flags}',
+    '-nostdlib++ -L %{lib} -lc++_shared'
+))
+
+config.substitutions.append(('%{exec}',
+    '%{executor} --prepend-path-env LD_LIBRARY_PATH /data/local/tmp/libc++ --execdir %T -- '
+))
+
+# This feature is used to XFAIL tests that fail on Android but haven't been
+# properly diagnosed and fixed yet.
+config.available_features.add('LIBCXX-ANDROID-FIXME')
+
+import os, site
+site.addsitedir(os.path.join('@LIBCXX_SOURCE_DIR@', 'utils'))
+import libcxx.test.params, libcxx.test.newconfig
+libcxx.test.newconfig.configure(
+    libcxx.test.params.DEFAULT_PARAMETERS,
+    libcxx.test.features.DEFAULT_FEATURES,
+    config,
+    lit_config
+)

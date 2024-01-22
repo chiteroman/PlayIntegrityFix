@@ -1,24 +1,52 @@
 #include <android/log.h>
 #include <unistd.h>
+#include <map>
+#include <fstream>
 #include "zygisk.hpp"
-#include "dobby.h"
+#include "shadowhook.h"
 #include "json.hpp"
 
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
 
 #define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PIF_JSON "/data/adb/pif.json"
 
+static JavaVM *jvm = nullptr;
+
+static jclass entryPointClass = nullptr;
+
+static jmethodID spoofFieldsMethod = nullptr;
+
+static void spoofFields() {
+
+    JNIEnv *env;
+    jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
+
+    if (env != nullptr && entryPointClass != nullptr && spoofFieldsMethod != nullptr) {
+
+        env->CallStaticVoidMethod(entryPointClass, spoofFieldsMethod);
+
+        LOGD("[Zygisk] Call Java spoofFields!");
+    }
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionDescribe();
+        env->ExceptionClear();
+    }
+}
+
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
@@ -46,15 +74,16 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     } else if (prop == "sys.usb.state") {
 
         value = "none";
-
     }
+
+    if (prop == "ro.product.first_api_level") spoofFields();
 
     if (!prop.starts_with("debug") && !prop.starts_with("cache") && !prop.starts_with("persist")) {
 
         LOGD("[%s] -> %s", name, value);
     }
 
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const void *, T_Callback, void *);
@@ -64,22 +93,19 @@ my_system_property_read_callback(const void *pi, T_Callback callback, void *cook
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
+                                            reinterpret_cast<void *>(my_system_property_read_callback),
+                                            reinterpret_cast<void **>(&o_system_property_read_callback));
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
-    DobbyHook(
-            handle,
-            (dobby_dummy_func_t) my_system_property_read_callback,
-            (dobby_dummy_func_t *) &o_system_property_read_callback
-    );
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -87,55 +113,94 @@ public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
         this->api = api;
         this->env = env;
+        env->GetJavaVM(&jvm);
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        auto name = env->GetStringUTFChars(args->nice_name, nullptr);
+        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        bool isGms = memcmp(name, "com.google.android.gms", 22) == 0;
-        bool isGmsUnstable = memcmp(name, "com.google.android.gms.unstable", 31) == 0;
+        std::string_view process(rawProcess);
+        std::string_view dir(rawDir);
 
-        env->ReleaseStringUTFChars(args->nice_name, name);
+        bool isGms = dir.ends_with("/com.google.android.gms");
+        bool isGmsUnstable = process == "com.google.android.gms.unstable";
 
-        if (isGms) api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
+        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
 
-        if (isGmsUnstable) {
-            long dexSize = 0, jsonSize = 0;
-
-            int fd = api->connectCompanion();
-
-            read(fd, &dexSize, sizeof(long));
-            read(fd, &jsonSize, sizeof(long));
-
-            LOGD("Dex file size: %ld", dexSize);
-            LOGD("Json file size: %ld", jsonSize);
-
-            vector.resize(dexSize);
-            read(fd, vector.data(), dexSize);
-
-            std::vector<char> jsonVector(jsonSize);
-            read(fd, jsonVector.data(), jsonSize);
-
-            close(fd);
-
-            std::string_view jsonStr(jsonVector.cbegin(), jsonVector.cend());
-            json = nlohmann::json::parse(jsonStr, nullptr, false, true);
-
-            parseJson();
-
-            return; // We can't dlclose lib because of the hook
+        if (!isGms) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
         }
 
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+
+        if (!isGmsUnstable) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        long dexSize = 0, jsonSize = 0;
+
+        int fd = api->connectCompanion();
+
+        read(fd, &dexSize, sizeof(long));
+        read(fd, &jsonSize, sizeof(long));
+
+        LOGD("Dex file size: %ld", dexSize);
+        LOGD("Json file size: %ld", jsonSize);
+
+        if (dexSize > 0) {
+            vector.resize(dexSize);
+            read(fd, vector.data(), dexSize);
+        } else {
+            close(fd);
+            LOGD("Dex file empty!");
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        std::vector<char> jsonVector;
+        if (jsonSize > 0) {
+            jsonVector.resize(jsonSize);
+            read(fd, jsonVector.data(), jsonSize);
+        } else {
+            close(fd);
+            LOGD("Json file empty!");
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        close(fd);
+
+        std::string_view jsonStr(jsonVector.cbegin(), jsonVector.cend());
+        json = nlohmann::json::parse(jsonStr, nullptr, false, true);
+
+        parseJson();
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (vector.empty() || json.empty()) return;
 
-        doHook();
+        shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+
+        LOGD("JSON keys: %d", static_cast<int>(json.size()));
+
+        if (!json.contains("PRODUCT") ||
+            !json.contains("DEVICE") ||
+            !json.contains("MANUFACTURER") ||
+            !json.contains("BRAND") ||
+            !json.contains("MODEL") ||
+            !json.contains("FINGERPRINT")) {
+            LOGD("JSON doesn't contain important fields to spoof!");
+            return;
+        }
 
         injectDex();
+
+        doHook();
 
         vector.clear();
         json.clear();
@@ -171,12 +236,14 @@ private:
         auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
         auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
 
-        auto entryClass = (jclass) entryClassObj;
+        entryPointClass = (jclass) entryClassObj;
 
         LOGD("call init");
-        auto entryInit = env->GetStaticMethodID(entryClass, "init", "(Ljava/lang/String;)V");
+        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
         auto str = env->NewStringUTF(json.dump().c_str());
-        env->CallStaticVoidMethod(entryClass, entryInit, str);
+        env->CallStaticVoidMethod(entryPointClass, entryInit, str);
+
+        spoofFieldsMethod = env->GetStaticMethodID(entryPointClass, "spoofFields", "()V");
     }
 
     void parseJson() {
@@ -232,36 +299,17 @@ private:
 };
 
 static void companion(int fd) {
-    long dexSize = 0, jsonSize = 0;
-    std::vector<char> dexVector, jsonVector;
 
-    FILE *dexFile = fopen(CLASSES_DEX, "rb");
+    std::ifstream dexFile(CLASSES_DEX, std::ios::binary);
+    std::ifstream jsonFile(PIF_JSON);
 
-    if (dexFile) {
+    std::vector<char> dexVector((std::istreambuf_iterator<char>(dexFile)),
+                                std::istreambuf_iterator<char>());
+    std::vector<char> jsonVector((std::istreambuf_iterator<char>(jsonFile)),
+                                 std::istreambuf_iterator<char>());
 
-        fseek(dexFile, 0, SEEK_END);
-        dexSize = ftell(dexFile);
-        fseek(dexFile, 0, SEEK_SET);
-
-        dexVector.resize(dexSize);
-        fread(dexVector.data(), 1, dexSize, dexFile);
-
-        fclose(dexFile);
-    }
-
-    FILE *jsonFile = fopen(PIF_JSON, "r");
-
-    if (jsonFile) {
-
-        fseek(jsonFile, 0, SEEK_END);
-        jsonSize = ftell(jsonFile);
-        fseek(jsonFile, 0, SEEK_SET);
-
-        jsonVector.resize(jsonSize);
-        fread(jsonVector.data(), 1, jsonSize, jsonFile);
-
-        fclose(jsonFile);
-    }
+    long dexSize = dexVector.size();
+    long jsonSize = jsonVector.size();
 
     write(fd, &dexSize, sizeof(long));
     write(fd, &jsonSize, sizeof(long));

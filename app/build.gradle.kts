@@ -8,31 +8,18 @@ android {
     ndkVersion = "26.1.10909125"
     buildToolsVersion = "34.0.0"
 
-    packaging {
-        jniLibs {
-            excludes += "**/liblog.so"
-            excludes += "**/libdobby.so"
-        }
-    }
-
     defaultConfig {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15200
-        versionName = "v15.2"
+        versionCode = 15300
+        versionName = "v15.3"
 
         externalNativeBuild {
-            cmake {
-                arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
-                arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
-
-                cppFlags += "-std=c++20"
-                cppFlags += "-fno-exceptions"
-                cppFlags += "-fno-rtti"
-                cppFlags += "-fvisibility=hidden"
-                cppFlags += "-fvisibility-inlines-hidden"
+            ndk {
+                abiFilters += "arm64-v8a"
+                abiFilters += "armeabi-v7a"
+                jobs = Runtime.getRuntime().availableProcessors()
             }
         }
     }
@@ -53,9 +40,8 @@ android {
     }
 
     externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+        ndkBuild {
+            path = file("src/main/cpp/Android.mk")
         }
     }
 }

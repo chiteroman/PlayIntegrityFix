@@ -1,0 +1,41 @@
+{
+    global:
+        JNI_OnLoad;
+
+        shadowhook_get_version;
+
+        shadowhook_init;
+
+        shadowhook_get_mode;
+        shadowhook_get_debuggable;
+        shadowhook_set_debuggable;
+        shadowhook_get_recordable;
+        shadowhook_set_recordable;
+
+        shadowhook_get_errno;
+        shadowhook_to_errmsg;
+
+        shadowhook_hook_func_addr;
+        shadowhook_hook_sym_addr;
+        shadowhook_hook_sym_name;
+        shadowhook_hook_sym_name_callback;
+        shadowhook_unhook;
+
+        shadowhook_get_records;
+        shadowhook_dump_records;
+
+        shadowhook_dlopen;
+        shadowhook_dlclose;
+        shadowhook_dlsym;
+        shadowhook_dlsym_dynsym;
+        shadowhook_dlsym_symtab;
+
+        shadowhook_get_prev_func;
+        shadowhook_pop_stack;
+        shadowhook_allow_reentrant;
+        shadowhook_disallow_reentrant;
+        shadowhook_get_return_address;
+
+    local:
+        *;
+};

@@ -1,0 +1,52 @@
+#===----------------------------------------------------------------------===##
+#
+# Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+#===----------------------------------------------------------------------===##
+
+#
+# This Dockerfile adds the Android SDK to the libcxx-builder docker image,
+# including platform-tools (adb), the Android Emulator, and an AVD image. It can
+# be used to run libc++ tests on the emulator.
+#
+# Build it locally using:
+#
+#   $ docker build -t libcxx-builder-android -f libcxx/utils/ci/Dockerfile.android libcxx/utils/ci
+#
+
+FROM ldionne/libcxx-builder
+
+WORKDIR /home/libcxx-builder
+
+# Allow access to the libcxx-builder home directory from other users. (e.g. when
+# running docker on a local LLVM checkout)
+RUN chmod a+rx /home/libcxx-builder
+
+ENV ANDROID_HOME /home/libcxx-builder/android-sdk
+ENV ANDROID_NDK_HOME ${ANDROID_HOME}/ndk/25.1.8937393
+ENV ANDROID_SERIAL emulator-5554
+
+# Add variables that should be preserved by sudo.
+RUN echo "Defaults env_keep += \"\
+  ANDROID_HOME \
+  ANDROID_NDK_HOME \
+  ANDROID_SERIAL \
+\"" | sudo tee -a /etc/sudoers
+
+RUN sudo apt-get update && sudo apt-get install -y openjdk-11-jdk unzip
+
+RUN curl -O https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip && \
+    mkdir $ANDROID_HOME && \
+    unzip commandlinetools-linux-8512546_latest.zip -d $ANDROID_HOME/cmdline-tools && \
+    mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+
+ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools"
+
+RUN yes | sdkmanager --licenses
+RUN sdkmanager --install "system-images;android-33;google_apis;x86_64" && \
+    sdkmanager --install "platforms;android-33" && \
+    sdkmanager --install emulator && \
+    sdkmanager --install platform-tools && \
+    sdkmanager --install "ndk;$(basename ${ANDROID_NDK_HOME})"

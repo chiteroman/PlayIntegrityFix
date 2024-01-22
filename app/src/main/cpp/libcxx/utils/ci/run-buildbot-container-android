@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#===----------------------------------------------------------------------===##
+#
+# Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+#===----------------------------------------------------------------------===##
+
+# Starts a shell in a container running the libc++ buildbot image and prepares
+# to run tests on an Android emulator. The permissions are handled differently
+# from run-buildbot-container:
+#  - We must start docker with --privileged so that /dev/kvm exists.
+#  - The Android emulator needs access to /dev/kvm, so the container setup
+#    command runs `chmod a+rwx /dev/kvm`.
+#  - chmod must run as root. `sudo chmod` works but the initial user must exist
+#    in the container (i.e. libcxx-builder works, but `--user $(id -u):$(id -g)`
+#    doesn't.)
+#  - The emulator wants read/write access to ${HOME}.
+#  - The container user needs read/write access to the monorepo, so (try to)
+#    create another user in the container with uid/gid matching the host user.
+
+set -e
+
+MONOREPO_ROOT="$(git rev-parse --show-toplevel)"
+if [[ ! -d "${MONOREPO_ROOT}/libcxx/utils/ci" ]]; then
+    echo "Was unable to find the root of the LLVM monorepo; are you running from within the monorepo?"
+    exit 1
+fi
+docker run -it --volume "${MONOREPO_ROOT}:/llvm" \
+    --cap-add=SYS_PTRACE --privileged libcxx-builder-android \
+    /llvm/libcxx/utils/ci/android-set-user.sh $(id -un) $(id -u) $(id -gn) $(id -g) \
+    sh -c "cd /llvm && /llvm/libcxx/utils/ci/android-create-avd.sh && bash -l"
