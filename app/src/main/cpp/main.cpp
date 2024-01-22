@@ -113,7 +113,6 @@ public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
         this->api = api;
         this->env = env;
-        env->GetJavaVM(&jvm);
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
@@ -141,6 +140,8 @@ public:
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
+
+        env->GetJavaVM(&jvm);
 
         long dexSize = 0, jsonSize = 0;
 
