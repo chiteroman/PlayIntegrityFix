@@ -77,7 +77,7 @@ public:
         if (!args->app_data_dir) return;
         const char* app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        if (ends_with(app_data_dir, "/com.google.android.gms")) {
+        if (std::string_view(app_data_dir).ends_with("/com.google.android.gms")) {
             const char* name = env->GetStringUTFChars(args->nice_name, nullptr);
             bool should_load_dex = strcmp(name, "com.google.android.gms.unstable") == 0;
             env->ReleaseStringUTFChars(args->nice_name, name);
