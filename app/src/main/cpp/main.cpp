@@ -74,19 +74,10 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-  if(!args->app_data_dir) return;
+        if (!args->app_data_dir) return;
+        const char* app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-    static bool ends_with(std::string_view str, std::string_view suffix) {
-    return str.size() >= suffix.size() && 
-           str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
-  }
-
-  if(!args->app_data_dir) return;
-        
-    std::string_view app_data_dir(
-    env->GetStringUTFChars(args->app_data_dir, nullptr));
-    
-  if(ends_with(app_data_dir, "/com.google.android.gms")) {
+        if (ends_with(app_data_dir, "/com.google.android.gms")) {
             const char* name = env->GetStringUTFChars(args->nice_name, nullptr);
             bool should_load_dex = strcmp(name, "com.google.android.gms.unstable") == 0;
             env->ReleaseStringUTFChars(args->nice_name, name);
@@ -94,7 +85,7 @@ public:
             api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
             if (!should_load_dex) {
-                env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);  
+                env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
                 return;
             }
 
@@ -207,8 +198,10 @@ static void companion(int fd) {
         fseek(dexFile, 0, SEEK_END);
         dexSize = ftell(dexFile);
         fseek(dexFile, 0, SEEK_SET);
+
         dexVector.resize(dexSize);
         fread(dexVector.data(), 1, dexSize, dexFile);
+
         fclose(dexFile);
     }
 
@@ -217,9 +210,9 @@ static void companion(int fd) {
         fseek(jsonFile, 0, SEEK_END);
         jsonSize = ftell(jsonFile);
         fseek(jsonFile, 0, SEEK_SET);
+
         jsonVector.resize(jsonSize);
         fread(jsonVector.data(), 1, jsonSize, jsonFile);
-
         fclose(jsonFile);
     }
 
