@@ -1,6 +1,6 @@
 #include <android/log.h>
 #include <unistd.h>
-#include <sys/stat.h>
+#include <string_view>
 #include "zygisk.hpp"
 #include "dobby.h"
 #include "json.hpp"
@@ -10,12 +10,6 @@
 #define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PIF_JSON "/data/adb/pif.json"
-
-static enum PIF_Request {
-    GET_GMS_UID,
-    GET_CLASSES_DEX,
-    END
-};
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
@@ -97,11 +91,10 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        int gms_uid = -1, fd = AskCompanion(PIF_Request::GET_GMS_UID);
-        read(fd, &gms_uid, sizeof(gms_uid));
-        close(fd);
+        if (!args->app_data_dir) return;
+        auto app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        if ((args->uid % 100000) == gms_uid) {
+        if (std::string_view(app_data_dir).ends_with("/com.google.android.gms")) {
 
             auto name = env->GetStringUTFChars(args->nice_name, nullptr);
             bool should_load_dex = memcmp(name, "com.google.android.gms.unstable", 31) == 0;
@@ -113,7 +106,7 @@ public:
 
             long dexSize = 0, jsonSize = 0;
 
-            fd = AskCompanion(PIF_Request::GET_CLASSES_DEX);
+            int fd = api->connectCompanion();
 
             read(fd, &dexSize, sizeof(long));
             read(fd, &jsonSize, sizeof(long));
@@ -133,16 +126,18 @@ public:
             json = nlohmann::json::parse(jsonStr, nullptr, false, true);
 
             parseJson();
-
-            return; // We can't dlclose lib because of the hook
         }
 
         unload:
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (vector.empty() || json.empty()) return;
+        if (vector.empty() || json.empty()) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+        // // Don't unload because of the hook
 
         doHook();
 
@@ -161,13 +156,6 @@ private:
     JNIEnv *env = nullptr;
     std::vector<char> vector;
     nlohmann::json json;
-
-    int AskCompanion(int req) {
-        int fd = api->connectCompanion();
-        if (fd < 0) return -1;
-        write(fd, &req, sizeof(req));
-        return fd;
-    }
 
     void injectDex() {
         LOGD("get system classloader");
@@ -249,7 +237,7 @@ private:
     }
 };
 
-static void request_dex(int fd) {
+static void companion(int fd) {
     long dexSize = 0, jsonSize = 0;
     std::vector<char> dexVector, jsonVector;
 
@@ -286,25 +274,6 @@ static void request_dex(int fd) {
 
     write(fd, dexVector.data(), dexSize);
     write(fd, jsonVector.data(), jsonSize);
-}
-
-static void get_gms_uid(int fd) {
-    struct stat st{};
-    int uid = -1;
-    if (!stat("/data/data/com.google.android.gms", &st))
-        uid = st.st_uid;
-    write(fd, &uid, sizeof(uid));
-}
-
-static void companion(int fd) {
-    int req = -1;
-    read(fd, &req, sizeof(req));
-    switch (req) {
-        case PIF_Request::GET_GMS_UID:
-            return get_gms_uid(fd);
-        case PIF_Request::GET_CLASSES_DEX:
-            return request_dex(fd);
-    }
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
