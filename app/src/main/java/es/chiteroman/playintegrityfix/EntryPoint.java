@@ -7,46 +7,44 @@ import org.json.JSONObject;
 
 import java.lang.reflect.Field;
 import java.security.KeyStore;
+import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
-import java.util.Iterator;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class EntryPoint {
-    private static final Field[] fieldsCache = new Field[Build.class.getDeclaredFields().length + Build.VERSION.class.getDeclaredFields().length];
-    private static final String[] valuesCache = new String[fieldsCache.length];
+    private static final Map<String, Field> cachedFields = new HashMap<>();
 
     public static void init(String json) {
         spoofProvider();
 
         try {
             JSONObject jsonObject = new JSONObject(json);
-            Iterator<String> keys = jsonObject.keys();
 
-            int index = 0;
-            while (keys.hasNext()) {
-                String key = keys.next();
+            jsonObject.keys().forEachRemaining(s -> {
                 try {
-                    String value = jsonObject.getString(key);
-                    Field field = getFieldByName(key);
-
+                    String value = jsonObject.getString(s);
+                    Field field = cachedFields.get(s);
                     if (field == null) {
-                        LOG("Field " + key + " not found!");
-                        continue;
+                        field = getFieldByName(s);
+                        if (field != null) {
+                            cachedFields.put(s, field);
+                        }
                     }
 
-                    fieldsCache[index] = field;
-                    valuesCache[index] = value;
-                    index++;
-
-                    LOG("Save " + field.getName() + " with value: " + value);
+                    if (field != null) {
+                        map.put(field, value);
+                    } else {
+                        LOG("Field " + s + " not found!");
+                    }
 
                 } catch (Throwable t) {
-                    LOG("Couldn't parse " + key + " key!");
+                    LOG("Couldn't parse " + s + " key!");
                 }
-            }
+            });
 
-            LOG("Map size: " + index);
-            spoofFields(index);
+            spoofFields();
 
         } catch (Throwable t) {
             LOG("Error loading json file: " + t);
@@ -78,19 +76,16 @@ public final class EntryPoint {
         }
     }
 
-    public static void spoofFields(int size) {
-        for (int i = 0; i < size; i++) {
-            Field field = fieldsCache[i];
-            String value = valuesCache[i];
-
+    public static void spoofFields() {
+        map.forEach((field, s) -> {
             try {
-                if (value.equals(field.get(null))) continue;
-                field.set(null, value);
-                LOG("Set " + field.getName() + " field value: " + value);
+                if (s.equals(field.get(null))) return;
+                field.set(null, s);
+                LOG("Set " + field.getName() + " field value: " + s);
             } catch (IllegalAccessException e) {
-                LOG("Couldn't access " + field.getName() + " value " + value + " | Exception: " + e);
+                LOG("Couldn't access " + field.getName() + " value " + s + " | Exception: " + e);
             }
-        }
+        });
     }
 
     private static Field getFieldByName(String name) {
