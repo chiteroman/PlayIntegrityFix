@@ -77,10 +77,11 @@ public final class EntryPoint {
     public static void spoofFields() {
         map.forEach((field, s) -> {
             try {
+                if (s.equals(field.get(null))) return;
                 field.set(null, s);
                 LOG("Set " + field.getName() + " field value: " + s);
             } catch (IllegalAccessException e) {
-                LOG("Couldn't set " + field.getName() + " value " + s + " | Exception: " + e);
+                LOG("Couldn't access " + field.getName() + " value " + s + " | Exception: " + e);
             }
         });
     }

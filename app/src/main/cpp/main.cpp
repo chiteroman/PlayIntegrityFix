@@ -1,10 +1,9 @@
 #include <android/log.h>
 #include <unistd.h>
-#include <map>
 #include <fstream>
 #include "zygisk.hpp"
 #include "json.hpp"
-#include "dobby.h"
+#include "shadowhook.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
 
@@ -20,38 +19,43 @@ static jmethodID spoofFieldsMethod = nullptr;
 
 static void spoofFields() {
 
-    if (jvm == nullptr) {
-        LOGD("JavaVM is null!");
-        return;
-    }
+    if (jvm == nullptr) return;
+
+    bool need_detach = false;
 
     JNIEnv *env;
-    jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
-
-    if (env != nullptr && entryPointClass != nullptr && spoofFieldsMethod != nullptr) {
-
-        env->CallStaticVoidMethod(entryPointClass, spoofFieldsMethod);
-
-        LOGD("[Zygisk] Call Java spoofFields!");
+    if (jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
+        if (jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+            need_detach = true;
+        } else {
+            LOGD("Couldn't get JNIEnv :(");
+            return;
+        }
     }
+
+    if (entryPointClass == nullptr || spoofFieldsMethod == nullptr) return;
+
+    env->CallStaticVoidMethod(entryPointClass, spoofFieldsMethod);
+
+    LOGD("[Zygisk] Call Java spoofFields!");
 
     if (env->ExceptionCheck()) {
         env->ExceptionDescribe();
         env->ExceptionClear();
     }
+
+    if (need_detach) jvm->DetachCurrentThread();
 }
 
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
+static T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr ||
-        !callbacks.contains(cookie))
-        return;
+    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
     std::string_view prop(name);
 
@@ -88,7 +92,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         LOGD("[%s] -> %s", name, value);
     }
 
-    return callbacks[cookie](cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const void *, T_Callback, void *);
@@ -98,20 +102,18 @@ my_system_property_read_callback(const void *pi, T_Callback callback, void *cook
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    callbacks[cookie] = callback;
+    o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+    void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
+                                            reinterpret_cast<void *>(my_system_property_read_callback),
+                                            reinterpret_cast<void **>(&o_system_property_read_callback));
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
-    DobbyHook(
-            handle,
-            reinterpret_cast<dobby_dummy_func_t>(my_system_property_read_callback),
-            reinterpret_cast<dobby_dummy_func_t *>(&o_system_property_read_callback));
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
 }
 
@@ -136,21 +138,8 @@ public:
             return;
         }
 
-        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+        bool isGms = std::string_view(rawDir).ends_with("/com.google.android.gms");
 
-        if (rawProcess == nullptr) {
-            env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        std::string_view dir(rawDir);
-        std::string_view process(rawProcess);
-
-        bool isGms = dir.ends_with("/com.google.android.gms");
-        bool isGmsUnstable = process == "com.google.android.gms.unstable";
-
-        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
         env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
 
         if (!isGms) {
@@ -160,12 +149,21 @@ public:
 
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (!isGmsUnstable) {
+        auto name = env->GetStringUTFChars(args->nice_name, nullptr);
+
+        if (name == nullptr) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        env->GetJavaVM(&jvm);
+        bool isGmsUnstable = strcmp(name, "com.google.android.gms.unstable") == 0;
+
+        env->ReleaseStringUTFChars(args->nice_name, name);
+
+        if (!isGmsUnstable) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
 
         long dexSize = 0, jsonSize = 0;
 
@@ -208,6 +206,10 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (vector.empty() || json.empty()) return;
 
+        shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+
+        env->GetJavaVM(&jvm);
+
         injectDex();
 
         doHook();
@@ -247,13 +249,12 @@ private:
         auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
 
         entryPointClass = (jclass) entryClassObj;
+        spoofFieldsMethod = env->GetStaticMethodID(entryPointClass, "spoofFields", "()V");
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
         auto str = env->NewStringUTF(json.dump().c_str());
         env->CallStaticVoidMethod(entryPointClass, entryInit, str);
-
-        spoofFieldsMethod = env->GetStaticMethodID(entryPointClass, "spoofFields", "()V");
     }
 
     void parseJson() {
