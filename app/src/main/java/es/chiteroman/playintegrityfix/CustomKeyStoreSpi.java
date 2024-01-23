@@ -24,8 +24,9 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
-        for (StackTraceElement stackTraceElement : Thread.currentThread().getStackTrace()) {
-            if (stackTraceElement.getClassName().toLowerCase(Locale.US).contains("droidguard")) {
+        StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
+        for (int i = 0; i < stackTraceElements.length; i++) {
+            if (stackTraceElements[i].getClassName().toLowerCase(Locale.US).contains("droidguard")) {
                 EntryPoint.LOG("DroidGuard call certificate chain! Throw exception.");
                 throw new UnsupportedOperationException();
             }
