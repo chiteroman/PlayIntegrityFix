@@ -1,24 +1,22 @@
 #include <android/log.h>
 #include <unistd.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <fstream>
 #include <map>
+#include <fstream>
 #include "zygisk.hpp"
 #include "json.hpp"
 #include "dobby.h"
 
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__) 
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
 
-#define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"  
+#define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"
+
 #define PIF_JSON "/data/adb/pif.json"
 
-static JavaVM *jvm = nullptr;  
+static JavaVM *jvm = nullptr;
 
 static jclass entryPointClass = nullptr;
-static jmethodID spoofFieldsMethod = nullptr;
 
-static jbyteArray dexBuffer = nullptr;
+static jmethodID spoofFieldsMethod = nullptr;
 
 static void spoofFields() {
 
@@ -190,26 +188,35 @@ private:
     nlohmann::json json;
 
   void injectDex() {
+    LOGD("get system classloader");
+    auto clClass = env->FindClass("java/lang/ClassLoader");
+    auto getSystemClassLoader = env->GetStaticMethodID(clClass, "getSystemClassLoader",
+                                                       "()Ljava/lang/ClassLoader;");
+    auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
-    jclass loaderClass = env->FindClass("java/lang/ClassLoader");
-    jmethodID getLoader = env->GetStaticMethodID(loaderClass, "getSystemClassLoader",  
-      "()Ljava/lang/ClassLoader;");
-    
-    jobject loader = env->CallStaticObjectMethod(loaderClass, getLoader);
-  }
-    if (!dexBuffer) {
-      // Memory map the DEX file
-      int fd = open(CLASSES_DEX, O_RDONLY);
-      off_t size = lseek(fd, 0, SEEK_END);
-      
-      dexBuffer = env->NewDirectByteBuffer(mmap(nullptr, size, PROT_READ, 
-        MAP_PRIVATE, fd, 0), size);
-        
-      close(fd);   
+    LOGD("create class loader");
+    auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
+    auto dexClInit = env->GetMethodID(dexClClass, "<init>",
+                                      "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
+    auto buffer = env->NewDirectByteBuffer(dex_vector.data(), dex_vector.size()); // Fixed line
+    auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
+
+        LOGD("load class");
+        auto loadClass = env->GetMethodID(clClass, "loadClass",
+                                          "(Ljava/lang/String;)Ljava/lang/Class;");
+        auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
+        auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
+
+        entryPointClass = (jclass) entryClassObj;
+
+        LOGD("call init");
+        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
+        auto str = env->NewStringUTF(json.dump().c_str());
+        env->CallStaticVoidMethod(entryPointClass, entryInit, str);
+
+        spoofFieldsMethod = env->GetStaticMethodID(entryPointClass, "spoofFields", "()V");
     }
 
-  private:
-      
     void parseJson() {
         if (json.contains("FIRST_API_LEVEL")) {
 
@@ -282,6 +289,6 @@ static void companion(int fd) {
     write(fd, jsonVector.data(), jsonSize);
 }
 
-REGISTER_ZYGISK_MODULE(PlayIntegrityFix);
+REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
 
-REGISTER_ZYGISK_COMPANION(companion);
+REGISTER_ZYGISK_COMPANION(companion)
