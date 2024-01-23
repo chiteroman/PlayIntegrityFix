@@ -14,96 +14,80 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class EntryPoint {
-    private static final Map<Field, String> map = new HashMap<>();
+    private static final Map<String, Field> fieldCache = new HashMap<>();
+    private static JSONObject jsonObject = new JSONObject();
 
-    public static void init(String json) {
-
-        spoofProvider();
-
+    static {
         try {
-            JSONObject jsonObject = new JSONObject(json);
-
-            jsonObject.keys().forEachRemaining(s -> {
-                try {
-                    String value = jsonObject.getString(s);
-                    Field field = getFieldByName(s);
-
-                    if (field == null) {
-                        LOG("Field " + s + " not found!");
-                        return;
-                    }
-
-                    map.put(field, value);
-                    LOG("Save " + field.getName() + " with value: " + value);
-
-                } catch (Throwable t) {
-                    LOG("Couldn't parse " + s + " key!");
-                }
-            });
-
-            LOG("Map size: " + map.size());
-            spoofFields();
-
-        } catch (Throwable t) {
-            LOG("Error loading json file: " + t);
-        }
-    }
-
-    private static void spoofProvider() {
-        try {
-            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-            keyStore.load(null);
-
-            Field f = keyStore.getClass().getDeclaredField("keyStoreSpi");
-
-            f.setAccessible(true);
-            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) f.get(keyStore);
-            f.setAccessible(false);
-
             Provider provider = Security.getProvider("AndroidKeyStore");
-
             Provider customProvider = new CustomProvider(provider);
-
             Security.removeProvider("AndroidKeyStore");
             Security.insertProviderAt(customProvider, 1);
-
             LOG("Spoof Provider done!");
-
         } catch (Throwable t) {
             LOG("Error trying to spoof Provider: " + t);
         }
     }
 
+    public static void init(String json) {
+        try {
+            jsonObject = new JSONObject(json);
+            spoofFields();
+        } catch (Throwable t) {
+            LOG("Error loading json file: " + t);
+        }
+    }
+
     public static void spoofFields() {
-        map.forEach((field, s) -> {
+        jsonObject.keys().forEachRemaining(s -> {
             try {
-                field.set(null, s);
-                LOG("Set " + field.getName() + " field value: " + s);
-            } catch (IllegalAccessException e) {
-                LOG("Couldn't set " + field.getName() + " value " + s + " | Exception: " + e);
+                Object value = jsonObject.get(s);
+                setFieldValue(s, value);
+            } catch (Throwable ignored) {
             }
         });
     }
 
-    private static Field getFieldByName(String name) {
+    private static void setFieldValue(String name, Object value) {
+        if (name == null || value == null || name.isEmpty()) return;
 
-        Field field;
+        Field field = getField(name);
+        if (field == null) return;
+
+        try {
+            Object oldValue = field.get(null);
+            if (!value.equals(oldValue)) {
+                field.set(null, value);
+                LOG("Set [" + name + "] field value to [" + value + "]");
+            }
+        } catch (IllegalAccessException e) {
+            LOG("Couldn't modify field: " + e);
+        }
+    }
+
+    private static Field getField(String name) {
+        if (fieldCache.containsKey(name)) {
+            return fieldCache.get(name);
+        }
+
+        Field field = null;
         try {
             field = Build.class.getDeclaredField(name);
         } catch (NoSuchFieldException e) {
             try {
                 field = Build.VERSION.class.getDeclaredField(name);
             } catch (NoSuchFieldException ex) {
+                LOG("Couldn't find field: " + e);
                 return null;
             }
         }
 
         field.setAccessible(true);
-
+        fieldCache.put(name, field);
         return field;
     }
 
-    static void LOG(String msg) {
-        Log.d("PIF", msg);
+    public static void LOG(String msg) {
+        Log.d("PIF/Java", msg);
     }
 }
