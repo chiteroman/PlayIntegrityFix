@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <fstream>
 #include <map>
 #include "zygisk.hpp"
 #include "json.hpp"
@@ -207,6 +208,8 @@ private:
       close(fd);   
     }
 
+  private:
+      
     void parseJson() {
         if (json.contains("FIRST_API_LEVEL")) {
 
@@ -279,6 +282,6 @@ static void companion(int fd) {
     write(fd, jsonVector.data(), jsonSize);
 }
 
-REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
+REGISTER_ZYGISK_MODULE(PlayIntegrityFix);
 
-REGISTER_ZYGISK_COMPANION(companion)
+REGISTER_ZYGISK_COMPANION(companion);
