@@ -155,7 +155,7 @@ void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
         close(fd);
 
-        std::string_view json_str(json_vector.begin(), json_vector.end());
+        std::string_view json_str(json_vector.data(), json_vector.size());
         json = nlohmann::json::parse(json_str, nullptr, false, true);
 
         parseJson();
@@ -184,7 +184,7 @@ void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<char> vector;
+    std::vector<char> dex_vector;
     nlohmann::json json;
 
     void injectDex() {
