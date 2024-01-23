@@ -1,7 +1,8 @@
 #include <android/log.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 #include <map>
-#include <fstream>
 #include "zygisk.hpp"
 #include "json.hpp"
 #include "dobby.h"
@@ -11,7 +12,7 @@
 #define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"  
 #define PIF_JSON "/data/adb/pif.json"
 
-static JavaVM *jvm = nullptr;
+static JavaVM *jvm = nullptr;  
 
 static jclass entryPointClass = nullptr;
 static jmethodID spoofFieldsMethod = nullptr;
