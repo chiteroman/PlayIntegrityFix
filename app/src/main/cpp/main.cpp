@@ -122,53 +122,23 @@ public:
         this->env = env;
     }
 
-    void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+    if (!args->app_data_dir) return;
+    const char* app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        if (args == nullptr || args->nice_name == nullptr || args->app_data_dir == nullptr) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-
-        if (rawDir == nullptr) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
-
-        if (rawProcess == nullptr) {
-            env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        std::string_view dir(rawDir);
-        std::string_view process(rawProcess);
-
-        bool isGms = dir.ends_with("/com.google.android.gms");
-        bool isGmsUnstable = process == "com.google.android.gms.unstable";
-
-        env->ReleaseStringUTFChars(args->nice_name, rawProcess);
-        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-
-        if (!isGms) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
+    if (std::string_view(app_data_dir).ends_with("/com.google.android.gms")) {
+        const char* name = env->GetStringUTFChars(args->nice_name, nullptr);
+        bool should_load_dex = strcmp(name, "com.google.android.gms.unstable") == 0;
+        env->ReleaseStringUTFChars(args->nice_name, name);
 
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (!isGmsUnstable) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        if (!should_load_dex) {
+            env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
             return;
         }
 
-        env->GetJavaVM(&jvm);
-
         long dexSize = 0, jsonSize = 0;
-
         int fd = api->connectCompanion();
 
         read(fd, &dexSize, sizeof(long));
@@ -177,48 +147,39 @@ public:
         LOGD("Dex file size: %ld", dexSize);
         LOGD("Json file size: %ld", jsonSize);
 
-        if (dexSize > 0) {
-            vector.resize(dexSize);
-            read(fd, vector.data(), dexSize);
-        } else {
-            close(fd);
-            LOGD("Dex file empty!");
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
+        dex_vector.resize(dexSize);
+        read(fd, dex_vector.data(), dexSize);
 
-        std::vector<char> jsonVector;
-        if (jsonSize > 0) {
-            jsonVector.resize(jsonSize);
-            read(fd, jsonVector.data(), jsonSize);
-        } else {
-            close(fd);
-            LOGD("Json file empty!");
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
+        std::vector<char> json_vector(jsonSize);
+        read(fd, json_vector.data(), jsonSize);
 
         close(fd);
 
-        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+        std::string_view json_str(json_vector.begin(), json_vector.end());
+        json = nlohmann::json::parse(json_str, nullptr, false, true);
 
         parseJson();
     }
 
-    void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (vector.empty() || json.empty()) return;
+    env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
+}
 
-        injectDex();
-
-        doHook();
-
-        vector.clear();
-        json.clear();
-    }
-
-    void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
+void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
+    if (dex_vector.empty() || json.empty()) {
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        return;
     }
+
+    doHook();
+    injectDex();
+
+    dex_vector.clear();
+    json.clear();
+}
+
+void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
+    api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+}
 
 private:
     zygisk::Api *api = nullptr;
