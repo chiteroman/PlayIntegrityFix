@@ -187,19 +187,19 @@ private:
     std::vector<char> dex_vector;
     nlohmann::json json;
 
-    void injectDex() {
-        LOGD("get system classloader");
-        auto clClass = env->FindClass("java/lang/ClassLoader");
-        auto getSystemClassLoader = env->GetStaticMethodID(clClass, "getSystemClassLoader",
-                                                           "()Ljava/lang/ClassLoader;");
-        auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
+  void injectDex() {
+    LOGD("get system classloader");
+    auto clClass = env->FindClass("java/lang/ClassLoader");
+    auto getSystemClassLoader = env->GetStaticMethodID(clClass, "getSystemClassLoader",
+                                                       "()Ljava/lang/ClassLoader;");
+    auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
-        LOGD("create class loader");
-        auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
-        auto dexClInit = env->GetMethodID(dexClClass, "<init>",
-                                          "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(vector.data(), vector.size());
-        auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
+    LOGD("create class loader");
+    auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
+    auto dexClInit = env->GetMethodID(dexClClass, "<init>",
+                                      "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
+    auto buffer = env->NewDirectByteBuffer(dex_vector.data(), dex_vector.size()); // Fixed line
+    auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
         auto loadClass = env->GetMethodID(clClass, "loadClass",
