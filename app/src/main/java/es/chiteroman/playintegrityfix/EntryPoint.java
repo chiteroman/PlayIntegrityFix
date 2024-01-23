@@ -3,7 +3,7 @@ package es.chiteroman.playintegrityfix;
 import android.os.Build;
 import android.util.Log;
 
-import org.json.JSONObject;
+import org.json.JSONObject; 
 
 import java.lang.reflect.Field;
 import java.security.KeyStore;
@@ -14,9 +14,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class EntryPoint {
+
     private static final Map<String, Field> cachedFields = new HashMap<>();
+    private static final Map<Field, String> map = new HashMap<>();
 
     public static void init(String json) {
+
         spoofProvider();
 
         try {
@@ -50,6 +53,7 @@ public final class EntryPoint {
             LOG("Error loading json file: " + t);
         }
     }
+
 
     private static void spoofProvider() {
         try {
