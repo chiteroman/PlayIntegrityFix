@@ -4,6 +4,6 @@ https://t.me/playintegrityfix
 
 # v15.3
 
-- Migrated from Dobby to ShadowHook (again)
+- New way to spoof field values!
 - Update code logic.
 - Fixed few bugs.

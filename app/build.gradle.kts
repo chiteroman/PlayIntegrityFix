@@ -12,18 +12,23 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15320
-        versionName = "v15.3.2"
+        versionCode = 15330
+        versionName = "v15.3.3"
+
+        buildFeatures {
+            prefab = true
+        }
 
         packaging {
             jniLibs {
+                excludes += "**/liblog.so"
                 excludes += "**/libdobby.so"
             }
         }
 
         externalNativeBuild {
             cmake {
-                arguments += "-DANDROID_STL=c++_static"
+                arguments += "-DANDROID_STL=none"
                 arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
 
                 cppFlags += "-std=c++20"
@@ -56,6 +61,10 @@ android {
             version = "3.22.1"
         }
     }
+}
+
+dependencies {
+    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
 
 tasks.register("updateModuleProp") {

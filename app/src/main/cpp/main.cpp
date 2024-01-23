@@ -20,6 +20,11 @@ static jmethodID spoofFieldsMethod = nullptr;
 
 static void spoofFields() {
 
+    if (jvm == nullptr) {
+        LOGD("JavaVM is null!");
+        return;
+    }
+
     JNIEnv *env;
     jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
 
@@ -119,11 +124,28 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+        if (args == nullptr || args->nice_name == nullptr || args->app_data_dir == nullptr) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
         auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        std::string_view process(rawProcess);
+        if (rawDir == nullptr) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        auto rawProcess = env->GetStringUTFChars(args->nice_name, nullptr);
+
+        if (rawProcess == nullptr) {
+            env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
         std::string_view dir(rawDir);
+        std::string_view process(rawProcess);
 
         bool isGms = dir.ends_with("/com.google.android.gms");
         bool isGmsUnstable = process == "com.google.android.gms.unstable";
@@ -178,26 +200,13 @@ public:
 
         close(fd);
 
-        std::string_view jsonStr(jsonVector.cbegin(), jsonVector.cend());
-        json = nlohmann::json::parse(jsonStr, nullptr, false, true);
+        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
 
         parseJson();
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (vector.empty() || json.empty()) return;
-
-        LOGD("JSON keys: %d", static_cast<int>(json.size()));
-
-        if (!json.contains("PRODUCT") ||
-            !json.contains("DEVICE") ||
-            !json.contains("MANUFACTURER") ||
-            !json.contains("BRAND") ||
-            !json.contains("MODEL") ||
-            !json.contains("FINGERPRINT")) {
-            LOGD("JSON doesn't contain important fields to spoof!");
-            return;
-        }
 
         injectDex();
 

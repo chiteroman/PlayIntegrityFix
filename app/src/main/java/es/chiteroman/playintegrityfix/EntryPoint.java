@@ -76,14 +76,12 @@ public final class EntryPoint {
 
     public static void spoofFields() {
         map.forEach((field, s) -> {
-            field.setAccessible(true);
             try {
                 field.set(null, s);
                 LOG("Set " + field.getName() + " field value: " + s);
             } catch (IllegalAccessException e) {
                 LOG("Couldn't set " + field.getName() + " value " + s + " | Exception: " + e);
             }
-            field.setAccessible(false);
         });
     }
 
@@ -99,6 +97,8 @@ public final class EntryPoint {
                 return null;
             }
         }
+
+        field.setAccessible(true);
 
         return field;
     }
