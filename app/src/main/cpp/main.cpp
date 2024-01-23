@@ -196,7 +196,7 @@ private:
       "()Ljava/lang/ClassLoader;");
     
     jobject loader = env->CallStaticObjectMethod(loaderClass, getLoader);
-
+  }
     if (!dexBuffer) {
       // Memory map the DEX file
       int fd = open(CLASSES_DEX, O_RDONLY);
