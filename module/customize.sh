@@ -16,38 +16,23 @@ if [ -d /data/adb/modules/MagiskHidePropsConf ]; then
 fi
 
 # Remove xiaomi.eu apps
-
 if [ -d "/product/app/XiaomiEUInject" ]; then
-    
     directory="$MODPATH/product/app/XiaomiEUInject"
-    
     [ -d "$directory" ] || mkdir -p "$directory"
-    
     touch "$directory/.replace"
-    
     ui_print "- XiaomiEUInject app removed."
 fi
 
 # Remove EliteRoms app
-
 if [ -d "/system/app/XInjectModule" ]; then
-    
     directory="$MODPATH/system/app/XInjectModule"
-    
     [ -d "$directory" ] || mkdir -p "$directory"
-    
     touch "$directory/.replace"
-    
     ui_print "- XInjectModule app removed."
 fi
-
 if [ -d "/system/app/EliteDevelopmentModule" ]; then
-    
     directory="$MODPATH/system/app/EliteDevelopmentModule"
-    
     [ -d "$directory" ] || mkdir -p "$directory"
-    
     touch "$directory/.replace"
-    
     ui_print "- EliteDevelopmentModule app removed."
 fi
