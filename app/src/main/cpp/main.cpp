@@ -54,41 +54,28 @@ typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 static T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
-
     if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
-
     std::string_view prop(name);
 
     if (prop.ends_with("security_patch")) {
-
         if (!SECURITY_PATCH.empty()) {
-
             value = SECURITY_PATCH.c_str();
         }
-
     } else if (prop.ends_with("api_level")) {
-
         if (!FIRST_API_LEVEL.empty()) {
-
             value = FIRST_API_LEVEL.c_str();
         }
-
     } else if (prop.ends_with("build.id")) {
-
         if (!BUILD_ID.empty()) {
-
             value = BUILD_ID.c_str();
         }
-
     } else if (prop == "sys.usb.state") {
-
         value = "none";
     }
 
     if (prop == "ro.product.first_api_level") spoofFields();
 
     if (!prop.starts_with("debug") && !prop.starts_with("cache") && !prop.starts_with("persist")) {
-
         LOGD("[%s] -> %s", name, value);
     }
 
@@ -259,51 +246,33 @@ private:
 
     void parseJson() {
         if (json.contains("FIRST_API_LEVEL")) {
-
             if (json["FIRST_API_LEVEL"].is_number_integer()) {
-
                 FIRST_API_LEVEL = std::to_string(json["FIRST_API_LEVEL"].get<int>());
-
             } else if (json["FIRST_API_LEVEL"].is_string()) {
-
                 FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
             }
-
             json.erase("FIRST_API_LEVEL");
-
         } else {
-
             LOGD("JSON file doesn't contain FIRST_API_LEVEL key :(");
         }
 
         if (json.contains("SECURITY_PATCH")) {
-
             if (json["SECURITY_PATCH"].is_string()) {
-
                 SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
             }
-
         } else {
-
             LOGD("JSON file doesn't contain SECURITY_PATCH key :(");
         }
 
         if (json.contains("ID")) {
-
             if (json["ID"].is_string()) {
-
                 BUILD_ID = json["ID"].get<std::string>();
             }
-
         } else if (json.contains("BUILD_ID")) {
-
             if (json["BUILD_ID"].is_string()) {
-
                 BUILD_ID = json["BUILD_ID"].get<std::string>();
             }
-
         } else {
-
             LOGD("JSON file doesn't contain ID/BUILD_ID keys :(");
         }
     }
