@@ -36,3 +36,15 @@ if [ -d "/system/app/EliteDevelopmentModule" ]; then
     touch "$directory/.replace"
     ui_print "- EliteDevelopmentModule app removed."
 fi
+
+# Copy default pif.json if it doesn't exist.
+if [ ! -e /data/adb/pif.json ]; then
+	cp -af $MODPATH/pif.json /data/adb/pif.json
+	ui_print "- Moved default pif.json file."
+fi
+
+# Copy default pif.json over the old one.
+if [ ! -d /data/adb/pif.json ]; then
+	cp -af $MODPATH/pif.json /data/adb/pif.json
+	ui_print "- Applied new pif.json file."
+fi
