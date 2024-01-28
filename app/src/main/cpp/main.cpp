@@ -1,9 +1,10 @@
 #include <android/log.h>
 #include <unistd.h>
+#include <sys/utsname.h>
 #include <fstream>
 #include "zygisk.hpp"
 #include "json.hpp"
-#include "shadowhook.h"
+#include "dobby.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
 
@@ -47,7 +48,7 @@ static void spoofFields() {
     if (need_detach) jvm->DetachCurrentThread();
 }
 
-static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
+static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID, KERNEL;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -106,15 +107,43 @@ my_system_property_read_callback(const void *pi, T_Callback callback, void *cook
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
+static int (*o_uname)(struct utsname *);
+
+static int my_uname(struct utsname *buff) {
+
+    auto ret = o_uname(buff);
+
+    if (buff && ret == 0) {
+
+        if (!KERNEL.empty() && KERNEL.size() < SYS_NMLN) {
+            LOGD("Spoofing kernel release! Original value: %s", buff->release);
+            strncpy(buff->release, KERNEL.c_str(), KERNEL.size());
+        }
+
+        LOGD("DroidGuard got kernel name: %s", buff->release);
+    }
+
+    return ret;
+}
+
 static void doHook() {
-    void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
-                                            reinterpret_cast<void *>(my_system_property_read_callback),
-                                            reinterpret_cast<void **>(&o_system_property_read_callback));
+    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
         return;
     }
     LOGD("Found '__system_property_read_callback' handle at %p", handle);
+    DobbyHook(handle, reinterpret_cast<void *>(my_system_property_read_callback),
+              reinterpret_cast<void **>(&o_system_property_read_callback));
+
+    void *unameHandle = DobbySymbolResolver("libc.so", "uname");
+    if (unameHandle == nullptr) {
+        LOGD("Couldn't find 'uname' handle. Report to @chiteroman");
+        return;
+    }
+    LOGD("Found 'uname' handle at %p", unameHandle);
+    DobbyHook(unameHandle, reinterpret_cast<void *>(my_uname),
+              reinterpret_cast<void **>(&o_uname));
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -206,9 +235,9 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (vector.empty() || json.empty()) return;
 
-        shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
-
-        env->GetJavaVM(&jvm);
+        if (env->GetJavaVM(&jvm) != JNI_OK) {
+            json["SPOOF_FIELDS_IN_JAVA"] = true;
+        }
 
         injectDex();
 
@@ -273,7 +302,21 @@ private:
 
         } else {
 
-            LOGD("JSON file doesn't contain FIRST_API_LEVEL key :(");
+            if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+
+                if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
+
+                    FIRST_API_LEVEL = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>());
+
+                } else if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
+
+                    FIRST_API_LEVEL = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+                }
+
+            } else {
+
+                LOGD("JSON file doesn't contain FIRST_API_LEVEL or DEVICE_INITIAL_SDK_INT keys :(");
+            }
         }
 
         if (json.contains("SECURITY_PATCH")) {
@@ -302,9 +345,26 @@ private:
                 BUILD_ID = json["BUILD_ID"].get<std::string>();
             }
 
+            json["ID"] = BUILD_ID;
+            json.erase("BUILD_ID");
+
         } else {
 
             LOGD("JSON file doesn't contain ID/BUILD_ID keys :(");
+        }
+
+        if (json.contains("KERNEL")) {
+
+            if (json["KERNEL"].is_string()) {
+
+                KERNEL = json["KERNEL"].get<std::string>();
+            }
+
+            json.erase("KERNEL");
+
+        } else {
+
+            LOGD("JSON file doesn't contain KERNEL key :(");
         }
     }
 };

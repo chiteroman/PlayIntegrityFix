@@ -28,6 +28,17 @@ if [ -d "/product/app/XiaomiEUInject" ]; then
     ui_print "- XiaomiEUInject app removed."
 fi
 
+if [ -d "/product/app/XiaomiEUInject-Stub" ]; then
+    
+    directory="$MODPATH/product/app/XiaomiEUInject-Stub"
+    
+    [ -d "$directory" ] || mkdir -p "$directory"
+    
+    touch "$directory/.replace"
+    
+    ui_print "- XiaomiEUInject-Stub app removed."
+fi
+
 # Remove EliteRoms app
 
 if [ -d "/system/app/XInjectModule" ]; then
@@ -51,3 +62,8 @@ if [ -d "/system/app/EliteDevelopmentModule" ]; then
     
     ui_print "- EliteDevelopmentModule app removed."
 fi
+
+ui_print "! Module doesn't include a certified fingerprint."
+ui_print "! You must get it from Internet, search on XDA how to do it."
+ui_print "! The pif.json template is inside module's folder."
+ui_print "! Move it to /data/adb/pif.json to spoof the values!"
