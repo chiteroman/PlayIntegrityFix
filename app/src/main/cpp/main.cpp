@@ -300,23 +300,19 @@ private:
 
             json.erase("FIRST_API_LEVEL");
 
+        } else if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+
+            if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
+
+                FIRST_API_LEVEL = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>());
+
+            } else if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
+
+                FIRST_API_LEVEL = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+            }
         } else {
 
-            if (json.contains("DEVICE_INITIAL_SDK_INT")) {
-
-                if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
-
-                    FIRST_API_LEVEL = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>());
-
-                } else if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
-
-                    FIRST_API_LEVEL = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
-                }
-
-            } else {
-
-                LOGD("JSON file doesn't contain FIRST_API_LEVEL or DEVICE_INITIAL_SDK_INT keys :(");
-            }
+            LOGD("JSON file doesn't contain FIRST_API_LEVEL or DEVICE_INITIAL_SDK_INT keys :(");
         }
 
         if (json.contains("SECURITY_PATCH")) {
