@@ -10,7 +10,7 @@ resetprop_if_diff() {
     local EXPECTED=$2
     local CURRENT=$(resetprop $NAME)
     
-    [ -z "$CURRENT" ] || [ "$CURRENT" == "$EXPECTED" ] || resetprop -n $NAME $EXPECTED
+    [ -z "$CURRENT" ] || [ "$CURRENT" == "$EXPECTED" ] || resetprop $NAME $EXPECTED
 }
 
 resetprop_if_match() {
@@ -18,7 +18,7 @@ resetprop_if_match() {
     local CONTAINS=$2
     local VALUE=$3
     
-    [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && resetprop -n $NAME $VALUE
+    [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && resetprop $NAME $VALUE
 }
 
 # RootBeer, Microsoft
@@ -29,6 +29,12 @@ resetprop_if_diff ro.boot.warranty_bit 0
 resetprop_if_diff ro.vendor.boot.warranty_bit 0
 resetprop_if_diff ro.vendor.warranty_bit 0
 resetprop_if_diff ro.warranty_bit 0
+
+# Xiaomi
+resetprop_if_diff ro.secureboot.lockstate locked
+
+# Realme
+resetprop_if_diff ro.boot.realmebootstate green
 
 # OnePlus
 resetprop_if_diff ro.is_ever_orange 0

@@ -15,9 +15,7 @@ public final class CustomProvider extends Provider {
     @Override
     public synchronized Service getService(String type, String algorithm) {
 
-        if (EntryPoint.SPOOF_FIELDS_IN_JAVA && "KeyStore".equals(type)) {
-            EntryPoint.spoofFields();
-        }
+        if ("KeyStore".equals(type)) EntryPoint.spoofFields();
 
         return super.getService(type, algorithm);
     }

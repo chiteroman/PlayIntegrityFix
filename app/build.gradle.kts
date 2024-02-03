@@ -12,8 +12,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15400
-        versionName = "v15.4"
+        versionCode = 15500
+        versionName = "v15.5"
 
         buildFeatures {
             prefab = true
@@ -23,23 +23,16 @@ android {
             jniLibs {
                 excludes += "**/liblog.so"
                 excludes += "**/libdobby.so"
+                excludes += "**/libshadowhook.so"
             }
         }
 
         externalNativeBuild {
-            cmake {
-                arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
-                arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
+            ndk {
+                abiFilters += "arm64-v8a"
+                abiFilters += "armeabi-v7a"
 
-                cFlags += "-fvisibility=hidden"
-                cFlags += "-fvisibility-inlines-hidden"
-
-                cppFlags += "-std=c++20"
-                cppFlags += "-fno-exceptions"
-                cppFlags += "-fno-rtti"
-                cppFlags += "-fvisibility=hidden"
-                cppFlags += "-fvisibility-inlines-hidden"
+                jobs = Runtime.getRuntime().availableProcessors()
             }
         }
     }
@@ -48,9 +41,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            )
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
@@ -60,15 +51,10 @@ android {
     }
 
     externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+        ndkBuild {
+            path = file("src/main/cpp/Android.mk")
         }
     }
-}
-
-dependencies {
-    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
 
 tasks.register("updateModuleProp") {
@@ -93,10 +79,8 @@ tasks.register("copyFiles") {
 
     doLast {
         val moduleFolder = project.rootDir.resolve("module")
-        val dexFile =
-            project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
-        val soDir =
-            project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/out/lib")
+        val dexFile = project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
+        val soDir = project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/out/lib")
 
         dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 

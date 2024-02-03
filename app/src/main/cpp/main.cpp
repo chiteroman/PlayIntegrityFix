@@ -1,10 +1,9 @@
 #include <android/log.h>
 #include <unistd.h>
-#include <sys/utsname.h>
-#include <fstream>
+#include <string>
 #include "zygisk.hpp"
 #include "json.hpp"
-#include "dobby.h"
+#include "shadowhook.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
 
@@ -12,43 +11,9 @@
 
 #define PIF_JSON "/data/adb/pif.json"
 
-static JavaVM *jvm = nullptr;
+#define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static jclass entryPointClass = nullptr;
-
-static jmethodID spoofFieldsMethod = nullptr;
-
-static void spoofFields() {
-
-    if (jvm == nullptr) return;
-
-    bool need_detach = false;
-
-    JNIEnv *env;
-    if (jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
-        if (jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
-            need_detach = true;
-        } else {
-            LOGD("Couldn't get JNIEnv :(");
-            return;
-        }
-    }
-
-    if (entryPointClass == nullptr || spoofFieldsMethod == nullptr) return;
-
-    env->CallStaticVoidMethod(entryPointClass, spoofFieldsMethod);
-
-    LOGD("[Zygisk] Call Java spoofFields!");
-
-    if (env->ExceptionCheck()) {
-        env->ExceptionDescribe();
-        env->ExceptionClear();
-    }
-
-    if (need_detach) jvm->DetachCurrentThread();
-}
-
-static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID, KERNEL;
+static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -65,6 +30,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!SECURITY_PATCH.empty()) {
 
             value = SECURITY_PATCH.c_str();
+            LOGD("[%s] -> %s", name, value);
         }
 
     } else if (prop.ends_with("api_level")) {
@@ -72,6 +38,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!FIRST_API_LEVEL.empty()) {
 
             value = FIRST_API_LEVEL.c_str();
+            LOGD("[%s] -> %s", name, value);
         }
 
     } else if (prop.ends_with("build.id")) {
@@ -79,17 +46,12 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!BUILD_ID.empty()) {
 
             value = BUILD_ID.c_str();
+            LOGD("[%s] -> %s", name, value);
         }
 
     } else if (prop == "sys.usb.state") {
 
         value = "none";
-    }
-
-    if (prop == "ro.product.first_api_level") spoofFields();
-
-    if (!prop.starts_with("debug") && !prop.starts_with("cache") && !prop.starts_with("persist")) {
-
         LOGD("[%s] -> %s", name, value);
     }
 
@@ -107,43 +69,15 @@ my_system_property_read_callback(const void *pi, T_Callback callback, void *cook
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
-static int (*o_uname)(struct utsname *);
-
-static int my_uname(struct utsname *buff) {
-
-    auto ret = o_uname(buff);
-
-    if (buff && ret == 0) {
-
-        if (!KERNEL.empty() && KERNEL.size() < SYS_NMLN) {
-            LOGD("Spoofing kernel release! Original value: %s", buff->release);
-            strncpy(buff->release, KERNEL.c_str(), KERNEL.size());
-        }
-
-        LOGD("DroidGuard got kernel name: %s", buff->release);
-    }
-
-    return ret;
-}
-
 static void doHook() {
-    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
+                                            reinterpret_cast<void *>(my_system_property_read_callback),
+                                            reinterpret_cast<void **>(&o_system_property_read_callback));
     if (handle == nullptr) {
-        LOGD("Couldn't find '__system_property_read_callback' handle. Report to @chiteroman");
+        LOGD("Couldn't hook '__system_property_read_callback'. Report to @chiteroman");
         return;
     }
-    LOGD("Found '__system_property_read_callback' handle at %p", handle);
-    DobbyHook(handle, reinterpret_cast<void *>(my_system_property_read_callback),
-              reinterpret_cast<void **>(&o_system_property_read_callback));
-
-    void *unameHandle = DobbySymbolResolver("libc.so", "uname");
-    if (unameHandle == nullptr) {
-        LOGD("Couldn't find 'uname' handle. Report to @chiteroman");
-        return;
-    }
-    LOGD("Found 'uname' handle at %p", unameHandle);
-    DobbyHook(unameHandle, reinterpret_cast<void *>(my_uname),
-              reinterpret_cast<void **>(&o_uname));
+    LOGD("Found and hooked '__system_property_read_callback' at %p", handle);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -155,21 +89,16 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        if (args == nullptr || args->nice_name == nullptr || args->app_data_dir == nullptr) {
+        auto dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+
+        if (dir == nullptr) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        bool isGms = std::string_view(dir).ends_with("/com.google.android.gms");
 
-        if (rawDir == nullptr) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        bool isGms = std::string_view(rawDir).ends_with("/com.google.android.gms");
-
-        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+        env->ReleaseStringUTFChars(args->app_data_dir, dir);
 
         if (!isGms) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
@@ -179,11 +108,6 @@ public:
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
         auto name = env->GetStringUTFChars(args->nice_name, nullptr);
-
-        if (name == nullptr) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
 
         bool isGmsUnstable = strcmp(name, "com.google.android.gms.unstable") == 0;
 
@@ -235,13 +159,11 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (vector.empty() || json.empty()) return;
 
-        if (env->GetJavaVM(&jvm) != JNI_OK) {
-            json["SPOOF_FIELDS_IN_JAVA"] = true;
-        }
-
-        injectDex();
+        shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
 
         doHook();
+
+        injectDex();
 
         vector.clear();
         json.clear();
@@ -277,8 +199,7 @@ private:
         auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
         auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
 
-        entryPointClass = (jclass) entryClassObj;
-        spoofFieldsMethod = env->GetStaticMethodID(entryPointClass, "spoofFields", "()V");
+        auto entryPointClass = (jclass) entryClassObj;
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
@@ -348,35 +269,40 @@ private:
 
             LOGD("JSON file doesn't contain ID/BUILD_ID keys :(");
         }
-
-        if (json.contains("KERNEL")) {
-
-            if (json["KERNEL"].is_string()) {
-
-                KERNEL = json["KERNEL"].get<std::string>();
-            }
-
-            json.erase("KERNEL");
-
-        } else {
-
-            LOGD("JSON file doesn't contain KERNEL key :(");
-        }
     }
 };
 
 static void companion(int fd) {
 
-    std::ifstream dexFile(CLASSES_DEX, std::ios::binary);
-    std::ifstream jsonFile(PIF_JSON);
+    long dexSize = 0, jsonSize = 0;
+    std::vector<char> dexVector, jsonVector;
 
-    std::vector<char> dexVector((std::istreambuf_iterator<char>(dexFile)),
-                                std::istreambuf_iterator<char>());
-    std::vector<char> jsonVector((std::istreambuf_iterator<char>(jsonFile)),
-                                 std::istreambuf_iterator<char>());
+    FILE *dexFile = fopen(CLASSES_DEX, "rb");
 
-    long dexSize = dexVector.size();
-    long jsonSize = jsonVector.size();
+    if (dexFile) {
+        fseek(dexFile, 0, SEEK_END);
+        dexSize = ftell(dexFile);
+        fseek(dexFile, 0, SEEK_SET);
+
+        dexVector.resize(dexSize);
+        fread(dexVector.data(), 1, dexSize, dexFile);
+
+        fclose(dexFile);
+    }
+
+    FILE *jsonFile = fopen(PIF_JSON, "rb");
+    if (jsonFile == nullptr) jsonFile = fopen(PIF_JSON_DEFAULT, "rb");
+
+    if (jsonFile) {
+        fseek(jsonFile, 0, SEEK_END);
+        jsonSize = ftell(jsonFile);
+        fseek(jsonFile, 0, SEEK_SET);
+
+        jsonVector.resize(jsonSize);
+        fread(jsonVector.data(), 1, jsonSize, jsonFile);
+
+        fclose(jsonFile);
+    }
 
     write(fd, &dexSize, sizeof(long));
     write(fd, &jsonSize, sizeof(long));

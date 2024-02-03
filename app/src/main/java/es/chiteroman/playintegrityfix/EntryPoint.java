@@ -15,7 +15,6 @@ import java.util.Map;
 
 public final class EntryPoint {
     private static final Map<Field, String> map = new HashMap<>();
-    public static boolean SPOOF_FIELDS_IN_JAVA = false;
 
     public static void init(String json) {
 
@@ -27,13 +26,6 @@ public final class EntryPoint {
             jsonObject.keys().forEachRemaining(s -> {
                 try {
                     String value = jsonObject.getString(s);
-
-                    if ("SPOOF_FIELDS_IN_JAVA".equals(value)) {
-                        SPOOF_FIELDS_IN_JAVA = true;
-                        jsonObject.remove("SPOOF_FIELDS_IN_JAVA");
-                        return;
-                    }
-
                     Field field = getFieldByName(s);
 
                     if (field == null) {
@@ -49,7 +41,6 @@ public final class EntryPoint {
                 }
             });
 
-            LOG("Map size: " + map.size());
             spoofFields();
 
         } catch (Throwable t) {
@@ -66,7 +57,6 @@ public final class EntryPoint {
 
             f.setAccessible(true);
             CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) f.get(keyStore);
-            f.setAccessible(false);
 
             Provider provider = Security.getProvider("AndroidKeyStore");
 
@@ -83,7 +73,7 @@ public final class EntryPoint {
     }
 
     public static void spoofFields() {
-        LOG("Call spoofFields!");
+        LOG("Call spoofFields");
         map.forEach((field, s) -> {
             try {
                 if (s.equals(field.get(null))) return;
