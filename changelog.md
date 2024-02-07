@@ -2,7 +2,12 @@ We have a Telegram group!
 If you want to share your knowledge join:
 https://t.me/playintegrityfix
 
-# v15.5
+# v15.6
 
-- Revert spoof kernel release (it didn't work). Kernel developers should implement in kernel the spoof or rename kernel localversion.
+- Fix bootloop issue in modern devices.
+- Move code logic to C.
 - Minor improvements.
+
+Device verdict should pass by default.
+If not, try removing /data/adb/pif.json file.
+DO NOT REMOVE pif.json in module's folder!
