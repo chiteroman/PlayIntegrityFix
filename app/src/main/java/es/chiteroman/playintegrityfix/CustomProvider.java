@@ -1,7 +1,6 @@
 package es.chiteroman.playintegrityfix;
 
 import java.security.Provider;
-import java.security.ProviderException;
 
 public final class CustomProvider extends Provider {
 
@@ -9,19 +8,15 @@ public final class CustomProvider extends Provider {
         super(provider.getName(), provider.getVersion(), provider.getInfo());
 
         putAll(provider);
+
+        put("KeyStore.AndroidKeyStore", CustomKeyStoreSpi.class.getName());
     }
 
     @Override
     public synchronized Service getService(String type, String algorithm) {
-        EntryPoint.spoofFields();
-
         EntryPoint.LOG(String.format("Service: '%s' | Algorithm: '%s'", type, algorithm));
 
-        if ("AndroidKeyStore".equals(algorithm)) {
-            Service service = super.getService(type, algorithm);
-            EntryPoint.LOG(service.toString());
-            throw new ProviderException();
-        }
+        EntryPoint.spoofFields();
 
         return super.getService(type, algorithm);
     }

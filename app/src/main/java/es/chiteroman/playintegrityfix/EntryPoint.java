@@ -6,6 +6,8 @@ import android.util.Log;
 import org.json.JSONObject;
 
 import java.lang.reflect.Field;
+import java.security.KeyStore;
+import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
 import java.util.HashMap;
@@ -15,6 +17,17 @@ public final class EntryPoint {
     private static final Map<Field, String> map = new HashMap<>();
 
     static {
+        try {
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+
+            Field field = keyStore.getClass().getDeclaredField("keyStoreSpi");
+            field.setAccessible(true);
+
+            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) field.get(keyStore);
+        } catch (Throwable t) {
+            LOG("Error spoofing AndroidKeyStore: " + t);
+        }
+
         Provider provider = Security.getProvider("AndroidKeyStore");
 
         Provider customProvider = new CustomProvider(provider);

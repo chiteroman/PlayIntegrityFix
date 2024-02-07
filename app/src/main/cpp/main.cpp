@@ -200,6 +200,68 @@ private:
     }
 
     void parseJson() {
+        if (json.contains("FIRST_API_LEVEL")) {
+
+            if (json["FIRST_API_LEVEL"].is_number_integer()) {
+
+                FIRST_API_LEVEL = std::to_string(json["FIRST_API_LEVEL"].get<int>());
+
+            } else if (json["FIRST_API_LEVEL"].is_string()) {
+
+                FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
+            }
+
+            json.erase("FIRST_API_LEVEL");
+
+        } else if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+
+            if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
+
+                FIRST_API_LEVEL = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>());
+
+            } else if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
+
+                FIRST_API_LEVEL = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+            }
+
+        } else {
+
+            LOGD("JSON file doesn't contain FIRST_API_LEVEL or DEVICE_INITIAL_SDK_INT keys :(");
+        }
+
+        if (json.contains("SECURITY_PATCH")) {
+
+            if (json["SECURITY_PATCH"].is_string()) {
+
+                SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+            }
+
+        } else {
+
+            LOGD("JSON file doesn't contain SECURITY_PATCH key :(");
+        }
+
+        if (json.contains("ID")) {
+
+            if (json["ID"].is_string()) {
+
+                BUILD_ID = json["ID"].get<std::string>();
+            }
+
+        } else if (json.contains("BUILD_ID")) {
+
+            if (json["BUILD_ID"].is_string()) {
+
+                BUILD_ID = json["BUILD_ID"].get<std::string>();
+            }
+
+            json["ID"] = BUILD_ID;
+            json.erase("BUILD_ID");
+
+        } else {
+
+            LOGD("JSON file doesn't contain ID/BUILD_ID keys :(");
+        }
     }
 };
 
