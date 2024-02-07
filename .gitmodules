@@ -1,6 +1,0 @@
-[submodule "app/src/main/cpp/Dobby"]
-	path = app/src/main/cpp/Dobby
-	url = https://github.com/jmpews/Dobby.git
-[submodule "app/src/main/cpp/libcxx"]
-	path = app/src/main/cpp/libcxx
-	url = https://github.com/topjohnwu/libcxx.git

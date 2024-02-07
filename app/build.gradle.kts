@@ -12,8 +12,9 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15500
-        versionName = "v15.5"
+        versionCode = 15600
+        versionName = "v15.6"
+        multiDexEnabled = false
 
         buildFeatures {
             prefab = true
@@ -41,6 +42,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            multiDexEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

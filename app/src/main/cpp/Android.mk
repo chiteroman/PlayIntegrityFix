@@ -5,10 +5,12 @@ LOCAL_MODULE := playintegrityfix
 LOCAL_SRC_FILES := $(LOCAL_PATH)/main.cpp
 LOCAL_C_INCLUDES := $(LOCAL_PATH)
 
+LOCAL_SRC_FILES += $(wildcard $(LOCAL_PATH)/cJSON/cJSON.c)
 LOCAL_SRC_FILES += $(wildcard $(LOCAL_PATH)/shadowhook/*.c)
 LOCAL_SRC_FILES += $(wildcard $(LOCAL_PATH)/shadowhook/common/*.c)
 LOCAL_SRC_FILES += $(wildcard $(LOCAL_PATH)/shadowhook/third_party/xdl/*.c)
 
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/cJSON
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/shadowhook
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/shadowhook/common
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/shadowhook/include
@@ -24,8 +26,5 @@ else ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
     LOCAL_C_INCLUDES += $(LOCAL_PATH)/shadowhook/arch/arm64
 endif
 
-LOCAL_STATIC_LIBRARIES := libcxx
 LOCAL_LDLIBS := -llog
 include $(BUILD_SHARED_LIBRARY)
-
-include $(LOCAL_PATH)/libcxx/Android.mk

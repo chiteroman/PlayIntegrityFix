@@ -1,9 +1,11 @@
 #include <android/log.h>
 #include <unistd.h>
-#include <string>
-#include "zygisk.hpp"
-#include "json.hpp"
+#include <string.h>
+#include <stdio.h>
+#include <string_view>
+#include "cJSON.h"
 #include "shadowhook.h"
+#include "zygisk.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
 
@@ -13,7 +15,9 @@
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
+static char FIRST_API_LEVEL[3]; // 1 - 34 (Max 2 chars) (Check: https://apilevels.com/)
+static char SECURITY_PATCH[11]; // 0000-00-00 (Max 10 chars)
+static char BUILD_ID[20];
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -27,32 +31,30 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (prop.ends_with("security_patch")) {
 
-        if (!SECURITY_PATCH.empty()) {
-
-            value = SECURITY_PATCH.c_str();
-            LOGD("[%s] -> %s", name, value);
+        if (SECURITY_PATCH[0] != 0) {
+            value = SECURITY_PATCH;
         }
+        LOGD("[%s]: %s", name, value);
 
     } else if (prop.ends_with("api_level")) {
 
-        if (!FIRST_API_LEVEL.empty()) {
-
-            value = FIRST_API_LEVEL.c_str();
-            LOGD("[%s] -> %s", name, value);
+        if (FIRST_API_LEVEL[0] != 0) {
+            value = FIRST_API_LEVEL;
         }
+        LOGD("[%s]: %s", name, value);
 
     } else if (prop.ends_with("build.id")) {
 
-        if (!BUILD_ID.empty()) {
-
-            value = BUILD_ID.c_str();
-            LOGD("[%s] -> %s", name, value);
+        if (BUILD_ID[0] != 0) {
+            value = BUILD_ID;
         }
+        LOGD("[%s]: %s", name, value);
 
     } else if (prop == "sys.usb.state") {
 
         value = "none";
-        LOGD("[%s] -> %s", name, value);
+        LOGD("[%s]: %s", name, value);
+
     }
 
     return o_callback(cookie, name, value, serial);
@@ -118,7 +120,7 @@ public:
             return;
         }
 
-        long dexSize = 0, jsonSize = 0;
+        long jsonSize = 0;
 
         int fd = api->connectCompanion();
 
@@ -129,8 +131,8 @@ public:
         LOGD("Json file size: %ld", jsonSize);
 
         if (dexSize > 0) {
-            vector.resize(dexSize);
-            read(fd, vector.data(), dexSize);
+            dexBuffer = new char[dexSize];
+            read(fd, dexBuffer, dexSize);
         } else {
             close(fd);
             LOGD("Dex file empty!");
@@ -138,10 +140,10 @@ public:
             return;
         }
 
-        std::vector<char> jsonVector;
+        char *jsonBuffer;
         if (jsonSize > 0) {
-            jsonVector.resize(jsonSize);
-            read(fd, jsonVector.data(), jsonSize);
+            jsonBuffer = new char[jsonSize];
+            read(fd, jsonBuffer, jsonSize);
         } else {
             close(fd);
             LOGD("Json file empty!");
@@ -151,22 +153,29 @@ public:
 
         close(fd);
 
-        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+        json = cJSON_ParseWithLength(jsonBuffer, jsonSize);
 
-        parseJson();
+        if (json == nullptr) {
+            LOGD("Error parsing json data!");
+            delete[] jsonBuffer;
+            delete[] dexBuffer;
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        }
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (vector.empty() || json.empty()) return;
+        if (dexBuffer == nullptr || json == nullptr || dexSize < 1) return;
 
         shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
+
+        parseJson();
 
         doHook();
 
         injectDex();
 
-        vector.clear();
-        json.clear();
+        delete[] dexBuffer;
+        cJSON_Delete(json);
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -176,8 +185,9 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<char> vector;
-    nlohmann::json json;
+    char *dexBuffer = nullptr;
+    long dexSize = 0;
+    cJSON *json = nullptr;
 
     void injectDex() {
         LOGD("get system classloader");
@@ -190,7 +200,7 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(vector.data(), vector.size());
+        auto buffer = env->NewDirectByteBuffer(dexBuffer, dexSize);
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -203,79 +213,60 @@ private:
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
-        auto str = env->NewStringUTF(json.dump().c_str());
+        auto str = env->NewStringUTF(cJSON_PrintUnformatted(json));
         env->CallStaticVoidMethod(entryPointClass, entryInit, str);
     }
 
     void parseJson() {
-        if (json.contains("FIRST_API_LEVEL")) {
-
-            if (json["FIRST_API_LEVEL"].is_number_integer()) {
-
-                FIRST_API_LEVEL = std::to_string(json["FIRST_API_LEVEL"].get<int>());
-
-            } else if (json["FIRST_API_LEVEL"].is_string()) {
-
-                FIRST_API_LEVEL = json["FIRST_API_LEVEL"].get<std::string>();
-            }
-
-            json.erase("FIRST_API_LEVEL");
-
-        } else if (json.contains("DEVICE_INITIAL_SDK_INT")) {
-
-            if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
-
-                FIRST_API_LEVEL = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>());
-
-            } else if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
-
-                FIRST_API_LEVEL = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+        cJSON *firstApiLevel = cJSON_GetObjectItem(json, "FIRST_API_LEVEL");
+        if (firstApiLevel) {
+            if (cJSON_IsNumber(firstApiLevel)) {
+                snprintf(FIRST_API_LEVEL, sizeof(FIRST_API_LEVEL), "%d", firstApiLevel->valueint);
+            } else if (cJSON_IsString(firstApiLevel)) {
+                strcpy(FIRST_API_LEVEL, firstApiLevel->valuestring);
             }
         } else {
-
-            LOGD("JSON file doesn't contain FIRST_API_LEVEL or DEVICE_INITIAL_SDK_INT keys :(");
+            cJSON *deviceInitialSdkInt = cJSON_GetObjectItem(json, "DEVICE_INITIAL_SDK_INT");
+            if (deviceInitialSdkInt) {
+                if (cJSON_IsNumber(deviceInitialSdkInt)) {
+                    snprintf(FIRST_API_LEVEL, sizeof(FIRST_API_LEVEL), "%d",
+                             deviceInitialSdkInt->valueint);
+                } else if (cJSON_IsString(deviceInitialSdkInt)) {
+                    strcpy(FIRST_API_LEVEL, deviceInitialSdkInt->valuestring);
+                }
+            } else {
+                LOGD("Couldn't parse FIRST_API_LEVEL neither DEVICE_INITIAL_SDK_INT");
+            }
         }
 
-        if (json.contains("SECURITY_PATCH")) {
-
-            if (json["SECURITY_PATCH"].is_string()) {
-
-                SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
-            }
-
+        cJSON *securityPatch = cJSON_GetObjectItem(json, "SECURITY_PATCH");
+        if (securityPatch && cJSON_IsString(securityPatch)) {
+            strcpy(SECURITY_PATCH, securityPatch->valuestring);
         } else {
-
-            LOGD("JSON file doesn't contain SECURITY_PATCH key :(");
+            LOGD("Couldn't parse SECURITY_PATCH");
         }
 
-        if (json.contains("ID")) {
-
-            if (json["ID"].is_string()) {
-
-                BUILD_ID = json["ID"].get<std::string>();
-            }
-
-        } else if (json.contains("BUILD_ID")) {
-
-            if (json["BUILD_ID"].is_string()) {
-
-                BUILD_ID = json["BUILD_ID"].get<std::string>();
-            }
-
-            json["ID"] = BUILD_ID;
-            json.erase("BUILD_ID");
-
+        cJSON *id = cJSON_GetObjectItem(json, "ID");
+        if (id && cJSON_IsString(id)) {
+            strcpy(BUILD_ID, id->valuestring);
         } else {
-
-            LOGD("JSON file doesn't contain ID/BUILD_ID keys :(");
+            cJSON *buildId = cJSON_GetObjectItem(json, "BUILD_ID");
+            if (buildId && cJSON_IsString(buildId)) {
+                strcpy(BUILD_ID, buildId->valuestring);
+            } else {
+                LOGD("Couldn't parse ID");
+            }
         }
     }
 };
 
 static void companion(int fd) {
 
-    long dexSize = 0, jsonSize = 0;
-    std::vector<char> dexVector, jsonVector;
+    long dexSize = 0;
+    long jsonSize = 0;
+
+    char *dexBuffer = nullptr;
+    char *jsonBuffer = nullptr;
 
     FILE *dexFile = fopen(CLASSES_DEX, "rb");
 
@@ -284,8 +275,8 @@ static void companion(int fd) {
         dexSize = ftell(dexFile);
         fseek(dexFile, 0, SEEK_SET);
 
-        dexVector.resize(dexSize);
-        fread(dexVector.data(), 1, dexSize, dexFile);
+        dexBuffer = new char[dexSize];
+        fread(dexBuffer, 1, dexSize, dexFile);
 
         fclose(dexFile);
     }
@@ -298,8 +289,8 @@ static void companion(int fd) {
         jsonSize = ftell(jsonFile);
         fseek(jsonFile, 0, SEEK_SET);
 
-        jsonVector.resize(jsonSize);
-        fread(jsonVector.data(), 1, jsonSize, jsonFile);
+        jsonBuffer = new char[jsonSize];
+        fread(jsonBuffer, 1, jsonSize, jsonFile);
 
         fclose(jsonFile);
     }
@@ -307,8 +298,11 @@ static void companion(int fd) {
     write(fd, &dexSize, sizeof(long));
     write(fd, &jsonSize, sizeof(long));
 
-    write(fd, dexVector.data(), dexSize);
-    write(fd, jsonVector.data(), jsonSize);
+    write(fd, dexBuffer, dexSize);
+    write(fd, jsonBuffer, jsonSize);
+
+    delete[] dexBuffer;
+    delete[] jsonBuffer;
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

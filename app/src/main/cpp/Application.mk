@@ -1,4 +1,4 @@
-APP_STL          := none
+APP_STL          := system
 APP_ABI          := armeabi-v7a arm64-v8a
 APP_CFLAGS       := -Oz -flto -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-stack-protector
 APP_CPPFLAGS     := -std=c++2b -fno-exceptions -fno-rtti

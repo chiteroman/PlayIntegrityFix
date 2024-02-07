@@ -73,7 +73,6 @@ public final class EntryPoint {
     }
 
     public static void spoofFields() {
-        LOG("Call spoofFields");
         map.forEach((field, s) -> {
             try {
                 if (s.equals(field.get(null))) return;
