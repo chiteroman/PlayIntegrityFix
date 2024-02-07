@@ -6,8 +6,6 @@ import android.util.Log;
 import org.json.JSONObject;
 
 import java.lang.reflect.Field;
-import java.security.KeyStore;
-import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
 import java.util.HashMap;
@@ -16,9 +14,16 @@ import java.util.Map;
 public final class EntryPoint {
     private static final Map<Field, String> map = new HashMap<>();
 
-    public static void init(String json) {
+    static {
+        Provider provider = Security.getProvider("AndroidKeyStore");
 
-        spoofProvider();
+        Provider customProvider = new CustomProvider(provider);
+
+        Security.removeProvider("AndroidKeyStore");
+        Security.insertProviderAt(customProvider, 1);
+    }
+
+    public static void init(String json) {
 
         try {
             JSONObject jsonObject = new JSONObject(json);
@@ -48,31 +53,7 @@ public final class EntryPoint {
         }
     }
 
-    private static void spoofProvider() {
-        try {
-            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-            keyStore.load(null);
-
-            Field f = keyStore.getClass().getDeclaredField("keyStoreSpi");
-
-            f.setAccessible(true);
-            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) f.get(keyStore);
-
-            Provider provider = Security.getProvider("AndroidKeyStore");
-
-            Provider customProvider = new CustomProvider(provider);
-
-            Security.removeProvider("AndroidKeyStore");
-            Security.insertProviderAt(customProvider, 1);
-
-            LOG("Spoof Provider done!");
-
-        } catch (Throwable t) {
-            LOG("Error trying to spoof Provider: " + t);
-        }
-    }
-
-    public static void spoofFields() {
+    static void spoofFields() {
         map.forEach((field, s) -> {
             try {
                 if (s.equals(field.get(null))) return;

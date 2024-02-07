@@ -1,10 +1,7 @@
 #include <android/log.h>
 #include <unistd.h>
-#include <string.h>
-#include <stdio.h>
-#include <string_view>
-#include "cJSON.h"
-#include "shadowhook.h"
+#include "dobby.h"
+#include "json.hpp"
 #include "zygisk.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
@@ -15,9 +12,7 @@
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static char FIRST_API_LEVEL[3]; // 1 - 34 (Max 2 chars) (Check: https://apilevels.com/)
-static char SECURITY_PATCH[11]; // 0000-00-00 (Max 10 chars)
-static char BUILD_ID[20];
+static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -31,22 +26,22 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (prop.ends_with("security_patch")) {
 
-        if (SECURITY_PATCH[0] != 0) {
-            value = SECURITY_PATCH;
+        if (!SECURITY_PATCH.empty()) {
+            value = SECURITY_PATCH.c_str();
         }
         LOGD("[%s]: %s", name, value);
 
     } else if (prop.ends_with("api_level")) {
 
-        if (FIRST_API_LEVEL[0] != 0) {
-            value = FIRST_API_LEVEL;
+        if (!FIRST_API_LEVEL.empty()) {
+            value = FIRST_API_LEVEL.c_str();
         }
         LOGD("[%s]: %s", name, value);
 
     } else if (prop.ends_with("build.id")) {
 
-        if (BUILD_ID[0] != 0) {
-            value = BUILD_ID;
+        if (!BUILD_ID.empty()) {
+            value = BUILD_ID.c_str();
         }
         LOGD("[%s]: %s", name, value);
 
@@ -72,13 +67,13 @@ my_system_property_read_callback(const void *pi, T_Callback callback, void *cook
 }
 
 static void doHook() {
-    void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
-                                            reinterpret_cast<void *>(my_system_property_read_callback),
-                                            reinterpret_cast<void **>(&o_system_property_read_callback));
+    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't hook '__system_property_read_callback'. Report to @chiteroman");
         return;
     }
+    DobbyHook(handle, (dobby_dummy_func_t) my_system_property_read_callback,
+              (dobby_dummy_func_t *) &o_system_property_read_callback);
     LOGD("Found and hooked '__system_property_read_callback' at %p", handle);
 }
 
@@ -111,7 +106,7 @@ public:
 
         auto name = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        bool isGmsUnstable = strcmp(name, "com.google.android.gms.unstable") == 0;
+        bool isGmsUnstable = std::string_view(name) == "com.google.android.gms.unstable";
 
         env->ReleaseStringUTFChars(args->nice_name, name);
 
@@ -120,7 +115,7 @@ public:
             return;
         }
 
-        long jsonSize = 0;
+        long dexSize = 0, jsonSize = 0;
 
         int fd = api->connectCompanion();
 
@@ -131,8 +126,8 @@ public:
         LOGD("Json file size: %ld", jsonSize);
 
         if (dexSize > 0) {
-            dexBuffer = new char[dexSize];
-            read(fd, dexBuffer, dexSize);
+            dexVector.resize(dexSize);
+            read(fd, dexVector.data(), dexSize);
         } else {
             close(fd);
             LOGD("Dex file empty!");
@@ -140,10 +135,10 @@ public:
             return;
         }
 
-        char *jsonBuffer;
+        std::vector<char> jsonVector;
         if (jsonSize > 0) {
-            jsonBuffer = new char[jsonSize];
-            read(fd, jsonBuffer, jsonSize);
+            jsonVector.resize(jsonSize);
+            read(fd, jsonVector.data(), jsonSize);
         } else {
             close(fd);
             LOGD("Json file empty!");
@@ -153,29 +148,17 @@ public:
 
         close(fd);
 
-        json = cJSON_ParseWithLength(jsonBuffer, jsonSize);
-
-        if (json == nullptr) {
-            LOGD("Error parsing json data!");
-            delete[] jsonBuffer;
-            delete[] dexBuffer;
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-        }
+        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexBuffer == nullptr || json == nullptr || dexSize < 1) return;
-
-        shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
+        if (dexVector.empty() || json.empty()) return;
 
         parseJson();
 
         doHook();
 
         injectDex();
-
-        delete[] dexBuffer;
-        cJSON_Delete(json);
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -183,11 +166,10 @@ public:
     }
 
 private:
-    zygisk::Api *api = nullptr;
-    JNIEnv *env = nullptr;
-    char *dexBuffer = nullptr;
-    long dexSize = 0;
-    cJSON *json = nullptr;
+    zygisk::Api *api;
+    JNIEnv *env;
+    std::vector<char> dexVector;
+    nlohmann::json json;
 
     void injectDex() {
         LOGD("get system classloader");
@@ -200,7 +182,7 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(dexBuffer, dexSize);
+        auto buffer = env->NewDirectByteBuffer(dexVector.data(), dexVector.size());
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -213,50 +195,11 @@ private:
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
-        auto str = env->NewStringUTF(cJSON_PrintUnformatted(json));
+        auto str = env->NewStringUTF(json.dump().c_str());
         env->CallStaticVoidMethod(entryPointClass, entryInit, str);
     }
 
     void parseJson() {
-        cJSON *firstApiLevel = cJSON_GetObjectItem(json, "FIRST_API_LEVEL");
-        if (firstApiLevel) {
-            if (cJSON_IsNumber(firstApiLevel)) {
-                snprintf(FIRST_API_LEVEL, sizeof(FIRST_API_LEVEL), "%d", firstApiLevel->valueint);
-            } else if (cJSON_IsString(firstApiLevel)) {
-                strcpy(FIRST_API_LEVEL, firstApiLevel->valuestring);
-            }
-        } else {
-            cJSON *deviceInitialSdkInt = cJSON_GetObjectItem(json, "DEVICE_INITIAL_SDK_INT");
-            if (deviceInitialSdkInt) {
-                if (cJSON_IsNumber(deviceInitialSdkInt)) {
-                    snprintf(FIRST_API_LEVEL, sizeof(FIRST_API_LEVEL), "%d",
-                             deviceInitialSdkInt->valueint);
-                } else if (cJSON_IsString(deviceInitialSdkInt)) {
-                    strcpy(FIRST_API_LEVEL, deviceInitialSdkInt->valuestring);
-                }
-            } else {
-                LOGD("Couldn't parse FIRST_API_LEVEL neither DEVICE_INITIAL_SDK_INT");
-            }
-        }
-
-        cJSON *securityPatch = cJSON_GetObjectItem(json, "SECURITY_PATCH");
-        if (securityPatch && cJSON_IsString(securityPatch)) {
-            strcpy(SECURITY_PATCH, securityPatch->valuestring);
-        } else {
-            LOGD("Couldn't parse SECURITY_PATCH");
-        }
-
-        cJSON *id = cJSON_GetObjectItem(json, "ID");
-        if (id && cJSON_IsString(id)) {
-            strcpy(BUILD_ID, id->valuestring);
-        } else {
-            cJSON *buildId = cJSON_GetObjectItem(json, "BUILD_ID");
-            if (buildId && cJSON_IsString(buildId)) {
-                strcpy(BUILD_ID, buildId->valuestring);
-            } else {
-                LOGD("Couldn't parse ID");
-            }
-        }
     }
 };
 
@@ -265,8 +208,7 @@ static void companion(int fd) {
     long dexSize = 0;
     long jsonSize = 0;
 
-    char *dexBuffer = nullptr;
-    char *jsonBuffer = nullptr;
+    std::vector<char> dexVector, jsonVector;
 
     FILE *dexFile = fopen(CLASSES_DEX, "rb");
 
@@ -275,8 +217,8 @@ static void companion(int fd) {
         dexSize = ftell(dexFile);
         fseek(dexFile, 0, SEEK_SET);
 
-        dexBuffer = new char[dexSize];
-        fread(dexBuffer, 1, dexSize, dexFile);
+        dexVector.resize(dexSize);
+        fread(dexVector.data(), 1, dexSize, dexFile);
 
         fclose(dexFile);
     }
@@ -289,8 +231,8 @@ static void companion(int fd) {
         jsonSize = ftell(jsonFile);
         fseek(jsonFile, 0, SEEK_SET);
 
-        jsonBuffer = new char[jsonSize];
-        fread(jsonBuffer, 1, jsonSize, jsonFile);
+        jsonVector.resize(jsonSize);
+        fread(jsonVector.data(), 1, jsonSize, jsonFile);
 
         fclose(jsonFile);
     }
@@ -298,11 +240,8 @@ static void companion(int fd) {
     write(fd, &dexSize, sizeof(long));
     write(fd, &jsonSize, sizeof(long));
 
-    write(fd, dexBuffer, dexSize);
-    write(fd, jsonBuffer, jsonSize);
-
-    delete[] dexBuffer;
-    delete[] jsonBuffer;
+    write(fd, dexVector.data(), dexSize);
+    write(fd, jsonVector.data(), jsonSize);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

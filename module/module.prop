@@ -1,7 +1,7 @@
 id=playintegrityfix
 name=Play Integrity Fix
-version=v15.6
-versionCode=15600
+version=v15.7
+versionCode=15700
 author=chiteroman
 description=Universal modular fix for Play Integrity (and SafetyNet) on devices running Android 8+.
 updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json
