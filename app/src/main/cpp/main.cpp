@@ -16,11 +16,13 @@ static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
@@ -52,7 +54,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     }
 
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const void *, T_Callback, void *);
@@ -62,12 +64,12 @@ my_system_property_read_callback(const void *pi, T_Callback callback, void *cook
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't hook '__system_property_read_callback'. Report to @chiteroman");
         return;

@@ -1,19 +1,19 @@
 # Conditional sensitive properties
 
 resetprop_if_diff() {
-    local NAME=$1
-    local EXPECTED=$2
-    local CURRENT=$(resetprop $NAME)
-    
-    [ -z "$CURRENT" ] || [ "$CURRENT" == "$EXPECTED" ] || resetprop $NAME $EXPECTED
+    local NAME="$1"
+    local EXPECTED="$2"
+    local CURRENT="$(resetprop "$NAME")"
+
+    [ -z "$CURRENT" ] || [ "$CURRENT" = "$EXPECTED" ] || resetprop "$NAME" "$EXPECTED"
 }
 
 resetprop_if_match() {
-    local NAME=$1
-    local CONTAINS=$2
-    local VALUE=$3
-    
-    [[ "$(resetprop $NAME)" == *"$CONTAINS"* ]] && resetprop $NAME $VALUE
+    local NAME="$1"
+    local CONTAINS="$2"
+    local VALUE="$3"
+
+    [[ "$(resetprop "$NAME")" = *"$CONTAINS"* ]] && resetprop "$NAME" "$VALUE"
 }
 
 # Magisk recovery mode
@@ -32,45 +32,33 @@ if [ "$(toybox cat /sys/fs/selinux/enforce)" == "0" ]; then
     chmod 440 /sys/fs/selinux/policy
 fi
 
-# must be set after boot_completed for various OEMs
-until [ "$(getprop sys.boot_completed)" == "1" ]; do
-    sleep 1
-done
+# Conditional late sensitive properties
 
-# RootBeer, Microsoft
-resetprop_if_diff ro.build.tags release-keys
+# SafetyNet/Play Integrity
+{
+    # must be set after boot_completed for various OEMs
+    until [ "$(getprop sys.boot_completed)" = "1" ]; do
+        sleep 1
+    done
 
-# Samsung
-resetprop_if_diff ro.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.warranty_bit 0
-resetprop_if_diff ro.warranty_bit 0
+    # avoid breaking Realme fingerprint scanners
+    resetprop_if_diff ro.boot.flash.locked 1
+    resetprop_if_diff ro.boot.realme.lockstate 1
 
-# Xiaomi
-resetprop_if_diff ro.secureboot.lockstate locked
+    # avoid breaking Oppo fingerprint scanners
+    resetprop_if_diff ro.boot.vbmeta.device_state locked
 
-# Realme
-resetprop_if_diff ro.boot.realmebootstate green
+    # avoid breaking OnePlus display modes/fingerprint scanners
+    resetprop_if_diff vendor.boot.verifiedbootstate green
 
-# OnePlus
-resetprop_if_diff ro.is_ever_orange 0
+    # avoid breaking OnePlus/Oppo display fingerprint scanners on OOS/ColorOS 12+
+    resetprop_if_diff ro.boot.verifiedbootstate green
+    resetprop_if_diff ro.boot.veritymode enforcing
+    resetprop_if_diff vendor.boot.vbmeta.device_state locked
+	
+	# Xiaomi
+	resetprop_if_diff ro.secureboot.lockstate locked
 
-# Other
-resetprop_if_diff ro.build.type user
-resetprop_if_diff ro.debuggable 0
-resetprop_if_diff ro.secure 1
-
-# avoid breaking Realme fingerprint scanners
-resetprop_if_diff ro.boot.flash.locked 1
-resetprop_if_diff ro.boot.realme.lockstate 1
-
-# avoid breaking Oppo fingerprint scanners
-resetprop_if_diff ro.boot.vbmeta.device_state locked
-
-# avoid breaking OnePlus display modes/fingerprint scanners
-resetprop_if_diff vendor.boot.verifiedbootstate green
-
-# avoid breaking OnePlus/Oppo display fingerprint scanners on OOS/ColorOS 12+
-resetprop_if_diff ro.boot.verifiedbootstate green
-resetprop_if_diff ro.boot.veritymode enforcing
-resetprop_if_diff vendor.boot.vbmeta.device_state locked
+	# Realme
+	resetprop_if_diff ro.boot.realmebootstate green
+}&

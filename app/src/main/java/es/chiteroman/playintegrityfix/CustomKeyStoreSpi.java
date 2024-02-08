@@ -15,7 +15,7 @@ import java.util.Enumeration;
 import java.util.Locale;
 
 public final class CustomKeyStoreSpi extends KeyStoreSpi {
-    public static volatile KeyStoreSpi keyStoreSpi;
+    public static volatile KeyStoreSpi keyStoreSpi = null;
 
     @Override
     public Key engineGetKey(String alias, char[] password) throws NoSuchAlgorithmException, UnrecoverableKeyException {

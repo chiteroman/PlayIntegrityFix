@@ -17,6 +17,7 @@ public final class EntryPoint {
     private static final Map<Field, String> map = new HashMap<>();
 
     static {
+        boolean spoof = false;
         try {
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
 
@@ -24,13 +25,16 @@ public final class EntryPoint {
             field.setAccessible(true);
 
             CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) field.get(keyStore);
+
+            if (CustomKeyStoreSpi.keyStoreSpi != null) spoof = true;
+
         } catch (Throwable t) {
             LOG("Error spoofing AndroidKeyStore: " + t);
         }
 
         Provider provider = Security.getProvider("AndroidKeyStore");
 
-        Provider customProvider = new CustomProvider(provider);
+        Provider customProvider = new CustomProvider(provider, spoof);
 
         Security.removeProvider("AndroidKeyStore");
         Security.insertProviderAt(customProvider, 1);
