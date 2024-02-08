@@ -56,9 +56,9 @@ fi
     resetprop_if_diff ro.boot.veritymode enforcing
     resetprop_if_diff vendor.boot.vbmeta.device_state locked
 	
-	# Xiaomi
-	resetprop_if_diff ro.secureboot.lockstate locked
+    # Xiaomi
+    resetprop_if_diff ro.secureboot.lockstate locked
 
-	# Realme
-	resetprop_if_diff ro.boot.realmebootstate green
+    # Realme
+    resetprop_if_diff ro.boot.realmebootstate green
 }&
