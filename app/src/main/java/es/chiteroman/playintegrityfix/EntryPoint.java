@@ -17,24 +17,21 @@ public final class EntryPoint {
     private static final Map<Field, String> map = new HashMap<>();
 
     static {
-        boolean spoof = false;
         try {
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            Field keyStoreSpi = keyStore.getClass().getDeclaredField("keyStoreSpi");
 
-            Field field = keyStore.getClass().getDeclaredField("keyStoreSpi");
-            field.setAccessible(true);
+            keyStoreSpi.setAccessible(true);
 
-            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) field.get(keyStore);
-
-            if (CustomKeyStoreSpi.keyStoreSpi != null) spoof = true;
+            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) keyStoreSpi.get(keyStore);
 
         } catch (Throwable t) {
-            LOG("Error spoofing AndroidKeyStore: " + t);
+            LOG("Couldn't get keyStoreSpi: " + t);
         }
 
         Provider provider = Security.getProvider("AndroidKeyStore");
 
-        Provider customProvider = new CustomProvider(provider, spoof);
+        Provider customProvider = new CustomProvider(provider);
 
         Security.removeProvider("AndroidKeyStore");
         Security.insertProviderAt(customProvider, 1);
@@ -74,10 +71,11 @@ public final class EntryPoint {
         map.forEach((field, s) -> {
             try {
                 if (s.equals(field.get(null))) return;
+                field.setAccessible(true);
                 field.set(null, s);
                 LOG("Set " + field.getName() + " field value: " + s);
-            } catch (IllegalAccessException e) {
-                LOG("Couldn't access " + field.getName() + " value " + s + " | Exception: " + e);
+            } catch (Throwable t) {
+                LOG(t.toString());
             }
         });
     }

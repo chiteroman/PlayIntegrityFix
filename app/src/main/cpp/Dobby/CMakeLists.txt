@@ -26,7 +26,7 @@ option(Plugin.SymbolResolver "Enable symbol resolver" ON)
 
 option(Plugin.ImportTableReplace "Enable import table replace " OFF)
 
-option(Plugin.Android.BionicLinkerUtil "Enable android bionic linker util" OFF)
+option(Plugin.Android.BionicLinkerUtil "Enable android bionic linker util" ON)
 
 option(DOBBY_BUILD_EXAMPLE "Build example" OFF)
 

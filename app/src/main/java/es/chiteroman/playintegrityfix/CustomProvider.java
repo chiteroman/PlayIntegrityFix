@@ -4,19 +4,17 @@ import java.security.Provider;
 
 public final class CustomProvider extends Provider {
 
-    public CustomProvider(Provider provider, boolean spoof) {
+    public CustomProvider(Provider provider) {
         super(provider.getName(), provider.getVersion(), provider.getInfo());
-
         putAll(provider);
-
-        if (spoof) put("KeyStore.AndroidKeyStore", CustomKeyStoreSpi.class.getName());
+        put("KeyStore.AndroidKeyStore", CustomKeyStoreSpi.class.getName());
     }
 
     @Override
     public synchronized Service getService(String type, String algorithm) {
         EntryPoint.LOG(String.format("Service: '%s' | Algorithm: '%s'", type, algorithm));
 
-        if ("AndroidKeyStore".equals(algorithm)) EntryPoint.spoofFields();
+        new Thread(EntryPoint::spoofFields).start();
 
         return super.getService(type, algorithm);
     }

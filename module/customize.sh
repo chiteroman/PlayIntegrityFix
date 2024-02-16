@@ -62,3 +62,18 @@ if [ -d "/system/app/EliteDevelopmentModule" ]; then
     
     ui_print "- EliteDevelopmentModule app removed."
 fi
+
+if [ -f "/data/adb/pif.json" ]; then
+    mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"
+    ui_print "- Backup old pif.json file"
+    ui_print "- Module will use the default one"
+    ui_print "- If you want to use your custom fingerprint, remove .old extension"
+fi
+
+ui_print "! If you don't pass DEVICE verdict after install (and reboot)"
+ui_print "! Check kernel release name (In Shell run: 'uname -r')"
+ui_print "! Google banned few strings in kernel to avoid users using custom kernels"
+ui_print "! Try to use stock kernel or not banned one"
+ui_print "! Kernels with 'bad' strings like 'lineageos' are banned!"
+ui_print "! Check official XDA post to know more about this"
+ui_print "! If you are using stock ROM without custom kernel just ignore this"

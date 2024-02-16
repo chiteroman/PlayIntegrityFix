@@ -12,8 +12,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15702
-        versionName = "v15.7.2"
+        versionCode = 15800
+        versionName = "v15.8"
         multiDexEnabled = false
 
         buildFeatures {
@@ -30,14 +30,23 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
                 arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
+
+                cFlags += "-fvisibility=hidden"
+                cFlags += "-fvisibility-inlines-hidden"
+                cFlags += "-flto"
+                cFlags += "-O3"
+                cFlags += "-mllvm -polly"
 
                 cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
                 cppFlags += "-fvisibility-inlines-hidden"
+                cppFlags += "-flto"
+                cppFlags += "-O3"
+                cppFlags += "-mllvm -polly"
             }
         }
     }

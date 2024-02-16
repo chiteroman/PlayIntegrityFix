@@ -1,5 +1,7 @@
 #include <android/log.h>
 #include <unistd.h>
+#include <fstream>
+#include <filesystem>
 #include "dobby.h"
 #include "json.hpp"
 #include "zygisk.hpp"
@@ -108,6 +110,11 @@ public:
 
         auto name = env->GetStringUTFChars(args->nice_name, nullptr);
 
+        if (name == nullptr) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
         bool isGmsUnstable = std::string_view(name) == "com.google.android.gms.unstable";
 
         env->ReleaseStringUTFChars(args->nice_name, name);
@@ -151,16 +158,16 @@ public:
         close(fd);
 
         json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+
+        parseJson();
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty() || json.empty()) return;
 
-        parseJson();
+        injectDex();
 
         doHook();
-
-        injectDex();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -274,31 +281,36 @@ static void companion(int fd) {
 
     std::vector<char> dexVector, jsonVector;
 
-    FILE *dexFile = fopen(CLASSES_DEX, "rb");
+    std::ifstream dexFile(CLASSES_DEX, std::ios::binary);
 
-    if (dexFile) {
-        fseek(dexFile, 0, SEEK_END);
-        dexSize = ftell(dexFile);
-        fseek(dexFile, 0, SEEK_SET);
+    if (dexFile.is_open()) {
+        dexFile.seekg(0, std::ios::end);
+        dexSize = dexFile.tellg();
+        dexFile.seekg(0, std::ios::beg);
 
         dexVector.resize(dexSize);
-        fread(dexVector.data(), 1, dexSize, dexFile);
-
-        fclose(dexFile);
+        dexFile.read(dexVector.data(), dexSize);
+        dexFile.close();
     }
 
-    FILE *jsonFile = fopen(PIF_JSON, "rb");
-    if (jsonFile == nullptr) jsonFile = fopen(PIF_JSON_DEFAULT, "rb");
+    std::ifstream jsonFile;
 
-    if (jsonFile) {
-        fseek(jsonFile, 0, SEEK_END);
-        jsonSize = ftell(jsonFile);
-        fseek(jsonFile, 0, SEEK_SET);
+    if (std::filesystem::exists(PIF_JSON)) {
+        jsonFile = std::ifstream(PIF_JSON);
+    } else if (std::filesystem::exists(PIF_JSON_DEFAULT)) {
+        jsonFile = std::ifstream(PIF_JSON_DEFAULT);
+    } else {
+        LOGD("Couldn't open pif.json file. Did you remove it?");
+    }
+
+    if (jsonFile.is_open()) {
+        jsonFile.seekg(0, std::ios::end);
+        jsonSize = jsonFile.tellg();
+        jsonFile.seekg(0, std::ios::beg);
 
         jsonVector.resize(jsonSize);
-        fread(jsonVector.data(), 1, jsonSize, jsonFile);
-
-        fclose(jsonFile);
+        jsonFile.read(jsonVector.data(), jsonSize);
+        jsonFile.close();
     }
 
     write(fd, &dexSize, sizeof(long));

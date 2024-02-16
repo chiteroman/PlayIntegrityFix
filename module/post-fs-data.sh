@@ -17,21 +17,20 @@ resetprop_if_diff() {
     [ -z "$CURRENT" ] || [ "$CURRENT" = "$EXPECTED" ] || resetprop "$NAME" "$EXPECTED"
 }
 
-# Conditional early sensitive properties
-
-# Samsung
-resetprop_if_diff ro.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.warranty_bit 0
-resetprop_if_diff ro.warranty_bit 0
-
-# OnePlus
-resetprop_if_diff ro.is_ever_orange 0
-
-# Microsoft, RootBeer
 resetprop_if_diff ro.build.tags release-keys
 
-# Other
+resetprop_if_diff ro.boot.warranty_bit 0
+
+resetprop_if_diff ro.vendor.boot.warranty_bit 0
+
+resetprop_if_diff ro.vendor.warranty_bit 0
+
+resetprop_if_diff ro.warranty_bit 0
+
+resetprop_if_diff ro.is_ever_orange 0
+
 resetprop_if_diff ro.build.type user
+
 resetprop_if_diff ro.debuggable 0
+
 resetprop_if_diff ro.secure 1
