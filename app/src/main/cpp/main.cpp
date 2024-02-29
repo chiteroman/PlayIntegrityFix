@@ -1,8 +1,7 @@
 #include <android/log.h>
+#include <sys/system_properties.h>
 #include <unistd.h>
-#include <fstream>
-#include <filesystem>
-#include "dobby.h"
+#include "shadowhook.h"
 #include "json.hpp"
 #include "zygisk.hpp"
 
@@ -12,19 +11,15 @@
 
 #define PIF_JSON "/data/adb/pif.json"
 
-#define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
-
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
+static T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr ||
-        !callbacks.contains(cookie))
-        return;
+    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
     std::string_view prop(name);
 
@@ -39,6 +34,8 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
         if (!FIRST_API_LEVEL.empty()) {
             value = FIRST_API_LEVEL.c_str();
+        } else {
+            value = "21";
         }
         LOGD("[%s]: %s", name, value);
 
@@ -53,31 +50,31 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
         value = "none";
         LOGD("[%s]: %s", name, value);
-
     }
 
-    return callbacks[cookie](cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
-static void (*o_system_property_read_callback)(const void *, T_Callback, void *);
+static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
 
 static void
-my_system_property_read_callback(const void *pi, T_Callback callback, void *cookie) {
+my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    callbacks[cookie] = callback;
+    o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+    void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
+                                            (void *) my_system_property_read_callback,
+                                            (void **) &o_system_property_read_callback);
     if (handle == nullptr) {
         LOGD("Couldn't hook '__system_property_read_callback'. Report to @chiteroman");
         return;
     }
-    DobbyHook(handle, (dobby_dummy_func_t) my_system_property_read_callback,
-              (dobby_dummy_func_t *) &o_system_property_read_callback);
     LOGD("Found and hooked '__system_property_read_callback' at %p", handle);
 }
 
@@ -144,16 +141,16 @@ public:
             return;
         }
 
-        std::vector<char> jsonVector;
-        if (jsonSize > 0) {
-            jsonVector.resize(jsonSize);
-            read(fd, jsonVector.data(), jsonSize);
-        } else {
+        if (jsonSize < 1) {
             close(fd);
-            LOGD("Json file empty!");
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            LOGD("JSON file not found!");
             return;
         }
+
+        std::vector<uint8_t> jsonVector;
+
+        jsonVector.resize(jsonSize);
+        read(fd, jsonVector.data(), jsonSize);
 
         close(fd);
 
@@ -163,7 +160,7 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty() || json.empty()) return;
+        if (dexVector.empty()) return;
 
         injectDex();
 
@@ -177,7 +174,7 @@ public:
 private:
     zygisk::Api *api;
     JNIEnv *env;
-    std::vector<char> dexVector;
+    std::vector<uint8_t> dexVector;
     nlohmann::json json;
 
     void injectDex() {
@@ -274,44 +271,32 @@ private:
     }
 };
 
+static std::vector<uint8_t> readFile(const char *path) {
+
+    std::vector<uint8_t> vector;
+
+    FILE *file = fopen(path, "rb");
+
+    if (file) {
+        fseek(file, 0, SEEK_END);
+        long size = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        vector.resize(size);
+        fread(vector.data(), 1, size, file);
+        fclose(file);
+    }
+
+    return vector;
+}
+
 static void companion(int fd) {
 
-    long dexSize = 0;
-    long jsonSize = 0;
+    auto dexVector = readFile(CLASSES_DEX);
+    auto jsonVector = readFile(PIF_JSON);
 
-    std::vector<char> dexVector, jsonVector;
-
-    std::ifstream dexFile(CLASSES_DEX, std::ios::binary);
-
-    if (dexFile.is_open()) {
-        dexFile.seekg(0, std::ios::end);
-        dexSize = dexFile.tellg();
-        dexFile.seekg(0, std::ios::beg);
-
-        dexVector.resize(dexSize);
-        dexFile.read(dexVector.data(), dexSize);
-        dexFile.close();
-    }
-
-    std::ifstream jsonFile;
-
-    if (std::filesystem::exists(PIF_JSON)) {
-        jsonFile = std::ifstream(PIF_JSON);
-    } else if (std::filesystem::exists(PIF_JSON_DEFAULT)) {
-        jsonFile = std::ifstream(PIF_JSON_DEFAULT);
-    } else {
-        LOGD("Couldn't open pif.json file. Did you remove it?");
-    }
-
-    if (jsonFile.is_open()) {
-        jsonFile.seekg(0, std::ios::end);
-        jsonSize = jsonFile.tellg();
-        jsonFile.seekg(0, std::ios::beg);
-
-        jsonVector.resize(jsonSize);
-        jsonFile.read(jsonVector.data(), jsonSize);
-        jsonFile.close();
-    }
+    long dexSize = dexVector.size();
+    long jsonSize = jsonVector.size();
 
     write(fd, &dexSize, sizeof(long));
     write(fd, &jsonSize, sizeof(long));

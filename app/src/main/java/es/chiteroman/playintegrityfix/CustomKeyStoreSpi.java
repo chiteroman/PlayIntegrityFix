@@ -15,10 +15,10 @@ import java.util.Date;
 import java.util.Enumeration;
 
 public final class CustomKeyStoreSpi extends KeyStoreSpi {
-    public static KeyStoreSpi keyStoreSpi = null;
     private static final String EAT_OID = "1.3.6.1.4.1.11129.2.1.25";
     private static final String ASN1_OID = "1.3.6.1.4.1.11129.2.1.17";
     private static final String KNOX_OID = "1.3.6.1.4.1.236.11.3.23.7";
+    public static volatile KeyStoreSpi keyStoreSpi = null;
 
     @Override
     public Key engineGetKey(String alias, char[] password) throws NoSuchAlgorithmException, UnrecoverableKeyException {
@@ -27,20 +27,32 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
-        Certificate[] certificates = keyStoreSpi.engineGetCertificateChain(alias);
-        // This shouldn't happen...
-        if (certificates == null) {
+        Certificate[] certificates;
+
+        // Check for broken TEE devices... It shouldn't happen because exception is in generateKeyPair
+        // Just to be sure...
+        try {
+            certificates = keyStoreSpi.engineGetCertificateChain(alias);
+        } catch (Throwable t) {
+            EntryPoint.LOG(t.toString());
             throw new UnsupportedOperationException();
         }
-        // Is certificate chain ?
-        if (certificates.length > 1) {
-            if (certificates[0] instanceof X509Certificate x509Certificate) {
-                if (x509Certificate.getExtensionValue(EAT_OID) != null || x509Certificate.getExtensionValue(ASN1_OID) != null || x509Certificate.getExtensionValue(KNOX_OID) != null) {
-                    EntryPoint.LOG("Certificate chain with dangerous extensions. Throw exception!");
-                    throw new UnsupportedOperationException();
-                }
+
+        // If certificate array is null, throw exception
+        // This shouldn't happen, weird...
+        if (certificates == null) {
+            EntryPoint.LOG("Certificate chain is null!");
+            throw new UnsupportedOperationException();
+        }
+
+        // If leaf certificate has attestation exceptions, throw exception!
+        if (certificates[0] instanceof X509Certificate x509Certificate) {
+            if (x509Certificate.getExtensionValue(EAT_OID) != null || x509Certificate.getExtensionValue(ASN1_OID) != null || x509Certificate.getExtensionValue(KNOX_OID) != null) {
+                EntryPoint.LOG("Certificate leaf with attestation extensions. Throw exception!");
+                throw new UnsupportedOperationException();
             }
         }
+
         return certificates;
     }
 

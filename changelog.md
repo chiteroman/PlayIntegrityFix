@@ -4,9 +4,10 @@ https://t.me/playintegrityfix
 
 Device verdict should pass by default.
 If not, try removing /data/adb/pif.json file.
-DO NOT REMOVE pif.json in module's folder!
 
-# v15.8
+# v15.9
 
-- Correctly detect attestation certificate chain and block it.
-- Misc improvements.
+- Updated fingerprint.
+- Updated NDK.
+- Other minor fixes.
+- ShadowHook is back!

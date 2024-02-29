@@ -5,15 +5,15 @@ plugins {
 android {
     namespace = "es.chiteroman.playintegrityfix"
     compileSdk = 34
-    ndkVersion = "26.1.10909125"
+    ndkVersion = "26.2.11394342"
     buildToolsVersion = "34.0.0"
 
     defaultConfig {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15800
-        versionName = "v15.8"
+        versionCode = 15900
+        versionName = "v15.9"
         multiDexEnabled = false
 
         buildFeatures {
@@ -24,29 +24,29 @@ android {
             jniLibs {
                 excludes += "**/liblog.so"
                 excludes += "**/libdobby.so"
+                excludes += "**/libshadowhook.so"
             }
         }
 
         externalNativeBuild {
             cmake {
-                arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=Release"
-                arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
+                abiFilters += "arm64-v8a"
+                abiFilters += "armeabi-v7a"
 
+                arguments += "-DANDROID_STL=none"
+                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
+
+                cFlags += "-std=c2x"
                 cFlags += "-fvisibility=hidden"
                 cFlags += "-fvisibility-inlines-hidden"
                 cFlags += "-flto"
-                cFlags += "-O3"
-                cFlags += "-mllvm -polly"
 
-                cppFlags += "-std=c++20"
+                cppFlags += "-std=c++2b"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
                 cppFlags += "-fvisibility-inlines-hidden"
                 cppFlags += "-flto"
-                cppFlags += "-O3"
-                cppFlags += "-mllvm -polly"
             }
         }
     }
@@ -75,6 +75,7 @@ android {
 
 dependencies {
     implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
+    implementation("com.bytedance.android:shadowhook:1.0.9")
 }
 
 tasks.register("updateModuleProp") {

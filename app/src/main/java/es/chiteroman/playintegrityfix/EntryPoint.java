@@ -39,6 +39,12 @@ public final class EntryPoint {
 
     public static void init(String json) {
 
+        if (json == null || json.isBlank() || json.isEmpty()) {
+            LOG("JSON empty! Using default values!");
+            defaultValues();
+            return;
+        }
+
         try {
             JSONObject jsonObject = new JSONObject(json);
 
@@ -64,6 +70,7 @@ public final class EntryPoint {
 
         } catch (Throwable t) {
             LOG("Error loading json file: " + t);
+            defaultValues();
         }
     }
 
@@ -96,6 +103,17 @@ public final class EntryPoint {
         field.setAccessible(true);
 
         return field;
+    }
+
+    private static void defaultValues() {
+        map.clear();
+        map.put(getFieldByName("MANUFACTURER"), "motorola");
+        map.put(getFieldByName("BRAND"), "motorola");
+        map.put(getFieldByName("DEVICE"), "griffin");
+        map.put(getFieldByName("PRODUCT"), "griffin_retcn");
+        map.put(getFieldByName("MODEL"), "XT1650-05");
+        map.put(getFieldByName("FINGERPRINT"), "motorola/griffin_retcn/griffin:6.0.1/MCC24.246-37/42:user/release-keys");
+        map.put(getFieldByName("SECURITY_PATCH"), "2016-07-01");
     }
 
     static void LOG(String msg) {
