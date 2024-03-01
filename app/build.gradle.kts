@@ -12,8 +12,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15900
-        versionName = "v15.9"
+        versionCode = 15910
+        versionName = "v15.9.1"
         multiDexEnabled = false
 
         buildFeatures {
@@ -75,7 +75,6 @@ android {
 
 dependencies {
     implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
-    implementation("com.bytedance.android:shadowhook:1.0.9")
 }
 
 tasks.register("updateModuleProp") {

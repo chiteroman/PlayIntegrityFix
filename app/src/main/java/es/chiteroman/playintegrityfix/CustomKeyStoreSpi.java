@@ -39,13 +39,13 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
         }
 
         // If certificate array is null, throw exception
-        // This shouldn't happen, weird...
+        // This shouldn't happen...
         if (certificates == null) {
             EntryPoint.LOG("Certificate chain is null!");
             throw new UnsupportedOperationException();
         }
 
-        // If leaf certificate has attestation exceptions, throw exception!
+        // If leaf certificate has attestation extensions, throw exception!
         if (certificates[0] instanceof X509Certificate x509Certificate) {
             if (x509Certificate.getExtensionValue(EAT_OID) != null || x509Certificate.getExtensionValue(ASN1_OID) != null || x509Certificate.getExtensionValue(KNOX_OID) != null) {
                 EntryPoint.LOG("Certificate leaf with attestation extensions. Throw exception!");

@@ -15,57 +15,19 @@ if [ -d /data/adb/modules/MagiskHidePropsConf ]; then
     ui_print "! WARNING, MagiskHidePropsConf module may cause issues with PIF."
 fi
 
-# Remove xiaomi.eu apps
-
-if [ -d "/product/app/XiaomiEUInject" ]; then
-    
-    directory="$MODPATH/product/app/XiaomiEUInject"
-    
-    [ -d "$directory" ] || mkdir -p "$directory"
-    
-    touch "$directory/.replace"
-    
-    ui_print "- XiaomiEUInject app removed."
-fi
-
-if [ -d "/product/app/XiaomiEUInject-Stub" ]; then
-    
-    directory="$MODPATH/product/app/XiaomiEUInject-Stub"
-    
-    [ -d "$directory" ] || mkdir -p "$directory"
-    
-    touch "$directory/.replace"
-    
-    ui_print "- XiaomiEUInject-Stub app removed."
-fi
-
-# Remove EliteRoms app
-
-if [ -d "/system/app/XInjectModule" ]; then
-    
-    directory="$MODPATH/system/app/XInjectModule"
-    
-    [ -d "$directory" ] || mkdir -p "$directory"
-    
-    touch "$directory/.replace"
-    
-    ui_print "- XInjectModule app removed."
-fi
-
-if [ -d "/system/app/EliteDevelopmentModule" ]; then
-    
-    directory="$MODPATH/system/app/EliteDevelopmentModule"
-    
-    [ -d "$directory" ] || mkdir -p "$directory"
-    
-    touch "$directory/.replace"
-    
-    ui_print "- EliteDevelopmentModule app removed."
-fi
-
+# Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
-    mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"
-    ui_print "- Backup old pif.json file"
-    ui_print "- Module will use the default one"
-    ui_print "- If you want to use your custom fingerprint, remove .old extension"
+    ui_print "- You are using custom fingerprint!"
+    ui_print "- If you are failing DEVICE verdict, remove /data/adb/pif.json file"
+    ui_print "- If pif.json file doesn't exist, module will use default one"
 fi
+
+# Remove conflict apps
+REPLACE="
+/system/app/EliteDevelopmentModule
+/system/app/XInjectModule
+/system/product/app/XiaomiEUInject
+/system/product/app/XiaomiEUInject-Stub
+/system/system_ext/app/hentaiLewdbSVTDummy
+/system/system_ext/app/PifPrebuilt
+"

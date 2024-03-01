@@ -5,9 +5,7 @@ https://t.me/playintegrityfix
 Device verdict should pass by default.
 If not, try removing /data/adb/pif.json file.
 
-# v15.9
+# v15.9.1
 
-- Updated fingerprint.
-- Updated NDK.
-- Other minor fixes.
-- ShadowHook is back!
+- Correctly remove conflict apps.
+- Fix attestation issues in few devices.

@@ -1,0 +1,11 @@
+{
+    "PRODUCT": "griffin_retcn",
+    "DEVICE": "griffin",
+    "MANUFACTURER": "motorola",
+    "BRAND": "motorola",
+    "MODEL": "XT1650-05",
+    "FINGERPRINT": "motorola/griffin_retcn/griffin:6.0.1/MCC24.246-37/42:user/release-keys",
+    "SECURITY_PATCH": "2016-07-01",
+    "ID": "MCC24.246-37",
+    "FIRST_API_LEVEL": 21
+}

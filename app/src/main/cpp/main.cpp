@@ -11,6 +11,8 @@
 
 #define PIF_JSON "/data/adb/pif.json"
 
+#define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
+
 static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
@@ -34,8 +36,6 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
         if (!FIRST_API_LEVEL.empty()) {
             value = FIRST_API_LEVEL.c_str();
-        } else {
-            value = "21";
         }
         LOGD("[%s]: %s", name, value);
 
@@ -144,6 +144,7 @@ public:
         if (jsonSize < 1) {
             close(fd);
             LOGD("JSON file not found!");
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
@@ -160,7 +161,7 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty()) return;
+        if (dexVector.empty() || json.empty()) return;
 
         injectDex();
 
@@ -172,8 +173,8 @@ public:
     }
 
 private:
-    zygisk::Api *api;
-    JNIEnv *env;
+    zygisk::Api *api = nullptr;
+    JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     nlohmann::json json;
 
@@ -285,6 +286,8 @@ static std::vector<uint8_t> readFile(const char *path) {
         vector.resize(size);
         fread(vector.data(), 1, size, file);
         fclose(file);
+    } else {
+        LOGD("Couldn't read %s file!", path);
     }
 
     return vector;
@@ -292,8 +295,13 @@ static std::vector<uint8_t> readFile(const char *path) {
 
 static void companion(int fd) {
 
-    auto dexVector = readFile(CLASSES_DEX);
-    auto jsonVector = readFile(PIF_JSON);
+    std::vector<uint8_t> dexVector, jsonVector;
+
+    dexVector = readFile(CLASSES_DEX);
+
+    jsonVector = readFile(PIF_JSON);
+
+    if (jsonVector.empty()) jsonVector = readFile(PIF_JSON_DEFAULT);
 
     long dexSize = dexVector.size();
     long jsonSize = jsonVector.size();
