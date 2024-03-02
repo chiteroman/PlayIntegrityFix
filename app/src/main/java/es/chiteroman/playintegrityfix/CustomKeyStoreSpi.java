@@ -30,11 +30,11 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
         Certificate[] certificates;
 
         // Check for broken TEE devices... It shouldn't happen because exception is in generateKeyPair
-        // Just to be sure...
+        // Also, for custom roms which implement a bypass :D
         try {
             certificates = keyStoreSpi.engineGetCertificateChain(alias);
         } catch (Throwable t) {
-            EntryPoint.LOG(t.toString());
+            EntryPoint.LOG("engineGetCertificateChain: " + t);
             throw new UnsupportedOperationException();
         }
 
@@ -48,7 +48,7 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
         // If leaf certificate has attestation extensions, throw exception!
         if (certificates[0] instanceof X509Certificate x509Certificate) {
             if (x509Certificate.getExtensionValue(EAT_OID) != null || x509Certificate.getExtensionValue(ASN1_OID) != null || x509Certificate.getExtensionValue(KNOX_OID) != null) {
-                EntryPoint.LOG("Certificate leaf with attestation extensions. Throw exception!");
+                EntryPoint.LOG("Leaf certificate with attestation extensions. Throw exception!");
                 throw new UnsupportedOperationException();
             }
         }

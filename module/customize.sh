@@ -18,12 +18,12 @@ fi
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
     ui_print "- You are using custom fingerprint!"
-    ui_print "- If you are failing DEVICE verdict, remove /data/adb/pif.json file"
+    ui_print "- If you fail DEVICE verdict, remove /data/adb/pif.json file"
     ui_print "- If pif.json file doesn't exist, module will use default one"
 fi
 
 # Remove conflict apps
-REPLACE="
+REMOVE="
 /system/app/EliteDevelopmentModule
 /system/app/XInjectModule
 /system/product/app/XiaomiEUInject
