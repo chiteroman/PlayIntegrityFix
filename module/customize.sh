@@ -31,3 +31,19 @@ REMOVE="
 /system/system_ext/app/hentaiLewdbSVTDummy
 /system/system_ext/app/PifPrebuilt
 "
+
+if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ] || [ "$MAGISK_VER" = *"-kitsune" ]; then
+    ui_print "- KernelSU / APatch / Kitsune Magisk detected, all apps removed!"
+else
+    ui_print "- Other Magisk detected, conflict apps will be removed one by one"
+    for path in $REMOVE; do
+        if [ -d "$path" ]; then
+            directory="$MODPATH${path}"
+            [ -d "$directory" ] || mkdir -p "$directory"
+            touch "$directory/.replace"
+            ui_print "- ${path##*/} app removed"
+        else
+            ui_print "- ${path##*/} app doesn't exist, skip"
+        fi
+    done
+fi

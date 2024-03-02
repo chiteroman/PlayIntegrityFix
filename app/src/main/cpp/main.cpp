@@ -1,7 +1,7 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include "shadowhook.h"
+#include "dobby.h"
 #include "json.hpp"
 #include "zygisk.hpp"
 
@@ -30,25 +30,25 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!SECURITY_PATCH.empty()) {
             value = SECURITY_PATCH.c_str();
         }
-        LOGD("[%s]: %s", name, value);
 
     } else if (prop.ends_with("api_level")) {
 
         if (!FIRST_API_LEVEL.empty()) {
             value = FIRST_API_LEVEL.c_str();
         }
-        LOGD("[%s]: %s", name, value);
 
     } else if (prop.ends_with("build.id")) {
 
         if (!BUILD_ID.empty()) {
             value = BUILD_ID.c_str();
         }
-        LOGD("[%s]: %s", name, value);
 
     } else if (prop == "sys.usb.state") {
 
         value = "none";
+    }
+
+    if (!prop.starts_with("persist") && !prop.starts_with("cache") && !prop.starts_with("debug")) {
         LOGD("[%s]: %s", name, value);
     }
 
@@ -67,14 +67,13 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
 }
 
 static void doHook() {
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
-    void *handle = shadowhook_hook_sym_name("libc.so", "__system_property_read_callback",
-                                            (void *) my_system_property_read_callback,
-                                            (void **) &o_system_property_read_callback);
+    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't hook '__system_property_read_callback'. Report to @chiteroman");
         return;
     }
+    DobbyHook(handle, (void *) my_system_property_read_callback,
+              (void **) &o_system_property_read_callback);
     LOGD("Found and hooked '__system_property_read_callback' at %p", handle);
 }
 
@@ -131,15 +130,15 @@ public:
         LOGD("Dex file size: %ld", dexSize);
         LOGD("Json file size: %ld", jsonSize);
 
-        if (dexSize > 0) {
-            dexVector.resize(dexSize);
-            read(fd, dexVector.data(), dexSize);
-        } else {
+        if (dexSize < 1) {
             close(fd);
             LOGD("Dex file empty!");
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
+
+        dexVector.resize(dexSize);
+        read(fd, dexVector.data(), dexSize);
 
         if (jsonSize < 1) {
             close(fd);
