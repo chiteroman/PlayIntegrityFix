@@ -27,16 +27,7 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
-        Certificate[] certificates;
-
-        // Check for broken TEE devices... It shouldn't happen because exception is in generateKeyPair
-        // Also, for custom roms which implement a bypass :D
-        try {
-            certificates = keyStoreSpi.engineGetCertificateChain(alias);
-        } catch (Throwable t) {
-            EntryPoint.LOG("engineGetCertificateChain: " + t);
-            throw new UnsupportedOperationException();
-        }
+        Certificate[] certificates = keyStoreSpi.engineGetCertificateChain(alias);
 
         // If certificate array is null, throw exception
         // This shouldn't happen...

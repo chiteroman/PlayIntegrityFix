@@ -12,13 +12,9 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15930
-        versionName = "v15.9.3"
+        versionCode = 15940
+        versionName = "v15.9.4"
         multiDexEnabled = false
-
-        buildFeatures {
-            prefab = true
-        }
 
         packaging {
             jniLibs {
@@ -29,18 +25,16 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
+                arguments += "-DANDROID_STL=c++_static"
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
+                arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
 
-                cFlags += "-std=c2x"
-                cFlags += "-fvisibility=hidden"
-                cFlags += "-fvisibility-inlines-hidden"
-
-                cppFlags += "-std=c++2b"
+                cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
                 cppFlags += "-fvisibility-inlines-hidden"
+                cppFlags += "-flto"
             }
         }
     }
@@ -65,10 +59,6 @@ android {
             version = "3.22.1"
         }
     }
-}
-
-dependencies {
-    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
 }
 
 tasks.register("updateModuleProp") {

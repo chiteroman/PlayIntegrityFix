@@ -22,8 +22,10 @@ if [ -f "/data/adb/pif.json" ]; then
     ui_print "- If pif.json file doesn't exist, module will use default one"
 fi
 
+ui_print "- Removing conflict apps..."
+
 # Remove conflict apps
-REMOVE="
+APPS="
 /system/app/EliteDevelopmentModule
 /system/app/XInjectModule
 /system/product/app/XiaomiEUInject
@@ -32,18 +34,17 @@ REMOVE="
 /system/system_ext/app/PifPrebuilt
 "
 
-if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ] || [ "$MAGISK_VER" = *"-kitsune" ]; then
-    ui_print "- KernelSU / APatch / Kitsune Magisk detected, all apps removed!"
-else
-    ui_print "- Other Magisk detected, conflict apps will be removed one by one"
-    for path in $REMOVE; do
-        if [ -d "$path" ]; then
-            directory="$MODPATH${path}"
+for app in $APPS; do
+        if [ -d "$app" ]; then
+            directory="$MODPATH$app"
             [ -d "$directory" ] || mkdir -p "$directory"
-            touch "$directory/.replace"
-            ui_print "- ${path##*/} app removed"
+            if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; then
+                mknod $directory c 0 0
+            else
+                touch $directory/.replace
+            fi
+            ui_print "- ${app##*/} app removed"
         else
-            ui_print "- ${path##*/} app doesn't exist, skip"
+            ui_print "- ${app##*/} app doesn't exist, skip"
         fi
-    done
-fi
+done

@@ -5,6 +5,6 @@ https://t.me/playintegrityfix
 Device verdict should pass by default.
 If not, try removing /data/adb/pif.json file.
 
-# v15.9.3
+# v15.9.4
 
-- Fix bootloop issue on few devices x2
+- Misc improvements.

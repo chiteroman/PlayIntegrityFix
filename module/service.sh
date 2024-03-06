@@ -51,4 +51,10 @@ fi
     resetprop_if_diff vendor.boot.verifiedbootstate green
 
     resetprop_if_diff vendor.boot.vbmeta.device_state locked
+
+    resetprop_if_diff ro.crypto.state encrypted
+
+    resetprop_if_diff ro.secureboot.lockstate locked
+
+    resetprop_if_diff ro.boot.realmebootstate green
 }&
