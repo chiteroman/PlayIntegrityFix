@@ -12,9 +12,13 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15940
-        versionName = "v15.9.4"
+        versionCode = 15950
+        versionName = "v15.9.5"
         multiDexEnabled = false
+
+        buildFeatures {
+            prefab = true
+        }
 
         packaging {
             jniLibs {
@@ -25,8 +29,8 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments += "-DANDROID_STL=c++_static"
-                arguments += "-DCMAKE_BUILD_TYPE=Release"
+                arguments += "-DANDROID_STL=none"
+                arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
                 arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
 
                 cppFlags += "-std=c++20"
@@ -34,7 +38,6 @@ android {
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
                 cppFlags += "-fvisibility-inlines-hidden"
-                cppFlags += "-flto"
             }
         }
     }
@@ -61,6 +64,10 @@ android {
     }
 }
 
+dependencies {
+    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
+}
+
 tasks.register("updateModuleProp") {
     doLast {
         val versionName = project.android.defaultConfig.versionName
@@ -84,7 +91,7 @@ tasks.register("copyFiles") {
     doLast {
         val moduleFolder = project.rootDir.resolve("module")
         val dexFile = project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
-        val soDir = project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/out/lib")
+        val soDir = project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/stripReleaseDebugSymbols/out/lib")
 
         dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 

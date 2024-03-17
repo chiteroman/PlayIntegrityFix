@@ -14,7 +14,7 @@ public final class CustomProvider extends Provider {
     public synchronized Service getService(String type, String algorithm) {
         EntryPoint.LOG(String.format("Service: '%s' | Algorithm: '%s'", type, algorithm));
 
-        new Thread(EntryPoint::spoofFields).start();
+        EntryPoint.spoofFields();
 
         return super.getService(type, algorithm);
     }

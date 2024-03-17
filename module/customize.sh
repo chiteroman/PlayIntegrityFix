@@ -22,9 +22,7 @@ if [ -f "/data/adb/pif.json" ]; then
     ui_print "- If pif.json file doesn't exist, module will use default one"
 fi
 
-ui_print "- Removing conflict apps..."
-
-# Remove conflict apps
+# Conflict apps
 APPS="
 /system/app/EliteDevelopmentModule
 /system/app/XInjectModule
@@ -35,16 +33,7 @@ APPS="
 "
 
 for app in $APPS; do
-        if [ -d "$app" ]; then
-            directory="$MODPATH$app"
-            [ -d "$directory" ] || mkdir -p "$directory"
-            if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; then
-                mknod $directory c 0 0
-            else
-                touch $directory/.replace
-            fi
-            ui_print "- ${app##*/} app removed"
-        else
-            ui_print "- ${app##*/} app doesn't exist, skip"
-        fi
+    if [ -d "$app" ]; then
+        ui_print "- ${app##*/} app found! You should uninstall it manually!"
+    fi
 done

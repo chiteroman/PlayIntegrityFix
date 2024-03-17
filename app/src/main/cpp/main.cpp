@@ -17,11 +17,13 @@ static std::string FIRST_API_LEVEL, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
@@ -52,7 +54,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         LOGD("[%s]: %s", name, value);
     }
 
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -62,19 +64,19 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    void *handle = DobbySymbolResolver("libc.so", "__system_property_read_callback");
+    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
     if (handle == nullptr) {
-        LOGD("Couldn't hook '__system_property_read_callback'. Report to @chiteroman");
+        LOGD("Couldn't hook __system_property_read_callback");
         return;
     }
     DobbyHook(handle, (void *) my_system_property_read_callback,
               (void **) &o_system_property_read_callback);
-    LOGD("Found and hooked '__system_property_read_callback' at %p", handle);
+    LOGD("Found and hooked __system_property_read_callback at %p", handle);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -86,77 +88,71 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        auto dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        const char *dir, *name;
+        bool isGms, isGmsUnstable;
 
-        if (dir == nullptr) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
+        if (!args) goto exit;
 
-        bool isGms = std::string_view(dir).ends_with("/com.google.android.gms");
+        dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+
+        if (!dir) goto exit;
+
+        isGms = std::string_view(dir).ends_with("/com.google.android.gms");
 
         env->ReleaseStringUTFChars(args->app_data_dir, dir);
 
-        if (!isGms) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
+        if (isGms) {
+            name = env->GetStringUTFChars(args->nice_name, nullptr);
+
+            if (!name) goto exit;
+
+            isGmsUnstable = strcmp(name, "com.google.android.gms.unstable") == 0;
+
+            if (isGmsUnstable) {
+
+                long dexSize = 0, jsonSize = 0;
+
+                int fd = api->connectCompanion();
+
+                read(fd, &dexSize, sizeof(long));
+                read(fd, &jsonSize, sizeof(long));
+
+                LOGD("Dex file size: %ld", dexSize);
+                LOGD("Json file size: %ld", jsonSize);
+
+                if (dexSize < 1 || jsonSize < 1) {
+                    close(fd);
+                    LOGD("Invalid files!");
+                    goto exit;
+                }
+
+                dexVector.resize(dexSize);
+                read(fd, dexVector.data(), dexSize);
+
+                std::vector<uint8_t> jsonVector;
+
+                jsonVector.resize(jsonSize);
+                read(fd, jsonVector.data(), jsonSize);
+
+                close(fd);
+
+                json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+
+                parseJson();
+
+                return;
+
+            } else {
+                api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+                goto exit;
+            }
+
+        } else {
+            goto exit;
         }
 
-        api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
-
-        auto name = env->GetStringUTFChars(args->nice_name, nullptr);
-
-        if (name == nullptr) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        bool isGmsUnstable = std::string_view(name) == "com.google.android.gms.unstable";
-
-        env->ReleaseStringUTFChars(args->nice_name, name);
-
-        if (!isGmsUnstable) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        long dexSize = 0, jsonSize = 0;
-
-        int fd = api->connectCompanion();
-
-        read(fd, &dexSize, sizeof(long));
-        read(fd, &jsonSize, sizeof(long));
-
-        LOGD("Dex file size: %ld", dexSize);
-        LOGD("Json file size: %ld", jsonSize);
-
-        if (dexSize < 1) {
-            close(fd);
-            LOGD("Dex file empty!");
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        dexVector.resize(dexSize);
-        read(fd, dexVector.data(), dexSize);
-
-        if (jsonSize < 1) {
-            close(fd);
-            LOGD("JSON file not found!");
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        std::vector<uint8_t> jsonVector;
-
-        jsonVector.resize(jsonSize);
-        read(fd, jsonVector.data(), jsonSize);
-
-        close(fd);
-
-        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
-
-        parseJson();
+        exit:
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
