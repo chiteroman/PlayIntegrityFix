@@ -88,70 +88,65 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        const char *dir, *name;
-        bool isGms, isGmsUnstable;
+        if (args != nullptr) {
 
-        if (!args) goto exit;
+            auto dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+            if (dir != nullptr) {
 
-        if (!dir) goto exit;
+                bool isGms = std::string_view(dir).ends_with("/com.google.android.gms");
 
-        isGms = std::string_view(dir).ends_with("/com.google.android.gms");
+                env->ReleaseStringUTFChars(args->app_data_dir, dir);
 
-        env->ReleaseStringUTFChars(args->app_data_dir, dir);
+                if (isGms) {
 
-        if (isGms) {
-            name = env->GetStringUTFChars(args->nice_name, nullptr);
+                    api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-            if (!name) goto exit;
+                    auto name = env->GetStringUTFChars(args->nice_name, nullptr);
 
-            isGmsUnstable = strcmp(name, "com.google.android.gms.unstable") == 0;
+                    if (name != nullptr) {
 
-            if (isGmsUnstable) {
+                        bool isGmsUnstable =
+                                std::string_view(name) == "com.google.android.gms.unstable";
 
-                long dexSize = 0, jsonSize = 0;
+                        env->ReleaseStringUTFChars(args->nice_name, name);
 
-                int fd = api->connectCompanion();
+                        if (isGmsUnstable) {
 
-                read(fd, &dexSize, sizeof(long));
-                read(fd, &jsonSize, sizeof(long));
+                            long dexSize = 0, jsonSize = 0;
 
-                LOGD("Dex file size: %ld", dexSize);
-                LOGD("Json file size: %ld", jsonSize);
+                            int fd = api->connectCompanion();
 
-                if (dexSize < 1 || jsonSize < 1) {
-                    close(fd);
-                    LOGD("Invalid files!");
-                    goto exit;
+                            read(fd, &dexSize, sizeof(long));
+                            read(fd, &jsonSize, sizeof(long));
+
+                            LOGD("Dex file size: %ld", dexSize);
+                            LOGD("Json file size: %ld", jsonSize);
+
+                            if (dexSize > 0 && jsonSize > 0) {
+
+                                dexVector.resize(dexSize);
+                                read(fd, dexVector.data(), dexSize);
+
+                                std::vector<uint8_t> jsonVector;
+
+                                jsonVector.resize(jsonSize);
+                                read(fd, jsonVector.data(), jsonSize);
+
+                                json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+
+                                parseJson();
+                            }
+
+                            close(fd);
+
+                            return;
+                        }
+                    }
                 }
-
-                dexVector.resize(dexSize);
-                read(fd, dexVector.data(), dexSize);
-
-                std::vector<uint8_t> jsonVector;
-
-                jsonVector.resize(jsonSize);
-                read(fd, jsonVector.data(), jsonSize);
-
-                close(fd);
-
-                json = nlohmann::json::parse(jsonVector, nullptr, false, true);
-
-                parseJson();
-
-                return;
-
-            } else {
-                api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
-                goto exit;
             }
-
-        } else {
-            goto exit;
         }
 
-        exit:
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 

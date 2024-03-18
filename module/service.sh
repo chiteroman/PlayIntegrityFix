@@ -41,16 +41,16 @@ fi
 	done
 	
 	# SafetyNet/Play Integrity | Avoid breaking Realme fingerprint scanners
-	resetprop ro.boot.flash.locked 1
+	resetprop_if_diff ro.boot.flash.locked 1
 	
 	# SafetyNet/Play Integrity | Avoid breaking Oppo fingerprint scanners
-	resetprop ro.boot.vbmeta.device_state locked
+	resetprop_if_diff ro.boot.vbmeta.device_state locked
 	
 	# SafetyNet/Play Integrity | Avoid breaking OnePlus display modes/fingerprint scanners
-	resetprop vendor.boot.verifiedbootstate green
+	resetprop_if_diff vendor.boot.verifiedbootstate green
 	
 	# SafetyNet/Play Integrity | Avoid breaking OnePlus display modes/fingerprint scanners on OOS 12
-	resetprop ro.boot.verifiedbootstate green
-	resetprop ro.boot.veritymode enforcing
-	resetprop vendor.boot.vbmeta.device_state locked
+	resetprop_if_diff ro.boot.verifiedbootstate green
+	resetprop_if_diff ro.boot.veritymode enforcing
+	resetprop_if_diff vendor.boot.vbmeta.device_state locked
 }&

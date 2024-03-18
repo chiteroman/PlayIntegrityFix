@@ -7,8 +7,6 @@ If not, try removing /data/adb/pif.json file.
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-# v15.9.5
+# v15.9.6
 
-- Strip libraries and reduce their size.
-- Fix attestation not passing on some devices.
-- Do not auto remove conflict apps, users should remove them manually.
+- Fix BASIC verdict not passing.
