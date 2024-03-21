@@ -1,11 +1,11 @@
 {
-    "PRODUCT": "griffin_retcn",
-    "DEVICE": "griffin",
-    "MANUFACTURER": "motorola",
-    "BRAND": "motorola",
-    "MODEL": "XT1650-05",
-    "FINGERPRINT": "motorola/griffin_retcn/griffin:6.0.1/MCC24.246-37/42:user/release-keys",
-    "SECURITY_PATCH": "2016-07-01",
-    "ID": "MCC24.246-37",
-    "FIRST_API_LEVEL": 21
+    "PRODUCT": "Phoenix_00WW",
+    "DEVICE": "PNX_sprout",
+    "MANUFACTURER": "HMD Global",
+    "BRAND": "Nokia",
+    "MODEL": "Nokia 8.1",
+    "FINGERPRINT": "Nokia/Phoenix_00WW/PNX_sprout:11/RKQ1.200906.002/00WW_6_21F:user/release-keys",
+    "SECURITY_PATCH": "2021-12-01",
+    "ID": "RKQ1.200906.002",
+    "FIRST_API_LEVEL": 30
 }
