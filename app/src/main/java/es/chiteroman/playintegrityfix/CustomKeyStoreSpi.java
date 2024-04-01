@@ -10,11 +10,14 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.Enumeration;
-import java.util.Locale;
 
 public final class CustomKeyStoreSpi extends KeyStoreSpi {
+    private static final String EAT_OID = "1.3.6.1.4.1.11129.2.1.25";
+    private static final String ASN1_OID = "1.3.6.1.4.1.11129.2.1.17";
+    private static final String KNOX_OID = "1.3.6.1.4.1.236.11.3.23.7";
     public static volatile KeyStoreSpi keyStoreSpi;
 
     @Override
@@ -25,19 +28,41 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
 
-        for (StackTraceElement stackTraceElement : Thread.currentThread().getStackTrace()) {
-            if (stackTraceElement.getClassName().toLowerCase(Locale.US).contains("droidguard")) {
-                EntryPoint.LOG("engineGetCertificateChain invoked by DroidGuard!");
+        boolean isDroidGuard = EntryPoint.isDroidGuard();
+
+        Certificate[] certificates = keyStoreSpi.engineGetCertificateChain(alias);
+
+        if (certificates[0] instanceof X509Certificate leaf) {
+
+            boolean attestationExtensions = leaf.getExtensionValue(EAT_OID) != null || leaf.getExtensionValue(ASN1_OID) != null || leaf.getExtensionValue(KNOX_OID) != null;
+
+            if (isDroidGuard && attestationExtensions) {
+                EntryPoint.LOG("DroidGuard and attestation extension detected! Throwing exception...");
                 throw new UnsupportedOperationException();
             }
         }
 
-        return keyStoreSpi.engineGetCertificateChain(alias);
+        return certificates;
     }
 
     @Override
     public Certificate engineGetCertificate(String alias) {
-        return keyStoreSpi.engineGetCertificate(alias);
+
+        boolean isDroidGuard = EntryPoint.isDroidGuard();
+
+        Certificate certificate = keyStoreSpi.engineGetCertificate(alias);
+
+        if (certificate instanceof X509Certificate leaf) {
+
+            boolean attestationExtensions = leaf.getExtensionValue(EAT_OID) != null || leaf.getExtensionValue(ASN1_OID) != null || leaf.getExtensionValue(KNOX_OID) != null;
+
+            if (isDroidGuard && attestationExtensions) {
+                EntryPoint.LOG("DroidGuard and attestation extension detected! Throwing exception...");
+                throw new UnsupportedOperationException();
+            }
+        }
+
+        return certificate;
     }
 
     @Override

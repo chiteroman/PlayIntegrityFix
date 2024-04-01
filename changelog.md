@@ -7,6 +7,6 @@ If not, try removing /data/adb/pif.json file.
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-# v15.9.6
+# v15.9.7
 
-- Fix BASIC verdict not passing.
+- Improve code detecting attestation extensions.
