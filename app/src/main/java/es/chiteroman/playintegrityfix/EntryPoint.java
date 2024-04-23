@@ -10,9 +10,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 public final class EntryPoint {
@@ -80,10 +78,6 @@ public final class EntryPoint {
                 LOG(t.toString());
             }
         });
-    }
-
-    static boolean isDroidGuard() {
-        return Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(stackTraceElement -> stackTraceElement.getClassName().toLowerCase(Locale.US).contains("droidguard"));
     }
 
     private static Field getFieldByName(String name) {
