@@ -39,7 +39,6 @@ fi
 	until [[ "$(getprop sys.boot_completed)" == "1" ]]; do
 		sleep 1
 	done
-	
 	# SafetyNet/Play Integrity | Avoid breaking Realme fingerprint scanners
 	resetprop_if_diff ro.boot.flash.locked 1
 	
@@ -53,4 +52,7 @@ fi
 	resetprop_if_diff ro.boot.verifiedbootstate green
 	resetprop_if_diff ro.boot.veritymode enforcing
 	resetprop_if_diff vendor.boot.vbmeta.device_state locked
+ 
+	# SafetyNet/Play Integrity | MIUI/hyperos boot lockstate
+	resetprop_if_diff ro.secureboot.lockstate locked
 }&
