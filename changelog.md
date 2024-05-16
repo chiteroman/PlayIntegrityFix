@@ -7,6 +7,8 @@ If not, try removing /data/adb/pif.json file.
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-# v15.9.7
+# v15.9.8
 
-- Improve code detecting attestation extensions.
+- MEETS_DEVICE_INTEGRITY is green again ✅
+- Refine code
+- You can define your own native props in pif.json!

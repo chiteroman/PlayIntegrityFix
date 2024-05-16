@@ -1,6 +1,7 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
+#include <regex>
 #include "dobby.h"
 #include "json.hpp"
 #include "zygisk.hpp"
@@ -13,7 +14,7 @@
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static nlohmann::json json;
+static nlohmann::json PROPS;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -23,35 +24,20 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
-    std::string_view prop(name);
+    std::string prop(name);
 
-    if (prop.ends_with("security_patch")) {
-
-        if (json.contains("SECURITY_PATCH")) {
-            if (json["SECURITY_PATCH"].is_string()) {
-                value = json["SECURITY_PATCH"].get<std::string>().c_str();
+    for (auto &[key, val]: PROPS.items()) {
+        if (key.starts_with('*')) {
+            if (prop.ends_with(key.substr(1))) {
+                value = val.get<std::string>().c_str();
+                break;
+            }
+        } else {
+            if (prop == key) {
+                value = val.get<std::string>().c_str();
+                break;
             }
         }
-
-    } else if (prop.ends_with("api_level")) {
-
-        if (json.contains("FIRST_API_LEVEL")) {
-            if (json["FIRST_API_LEVEL"].is_number_integer()) {
-                value = std::to_string(json["FIRST_API_LEVEL"].get<int>()).c_str();
-            }
-        }
-
-    } else if (prop.ends_with("build.id")) {
-
-        if (json.contains("BUILD_ID")) {
-            if (json["BUILD_ID"].is_string()) {
-                value = json["BUILD_ID"].get<std::string>().c_str();
-            }
-        }
-
-    } else if (prop == "sys.usb.state") {
-
-        value = "none";
     }
 
     if (!prop.starts_with("persist") && !prop.starts_with("cache") && !prop.starts_with("debug")) {
@@ -92,64 +78,76 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        if (args != nullptr) {
-
-            auto dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-
-            if (dir != nullptr) {
-
-                bool isGms = std::string_view(dir).ends_with("/com.google.android.gms");
-
-                env->ReleaseStringUTFChars(args->app_data_dir, dir);
-
-                if (isGms) {
-
-                    api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
-
-                    auto name = env->GetStringUTFChars(args->nice_name, nullptr);
-
-                    if (name != nullptr) {
-
-                        bool isGmsUnstable =
-                                std::string_view(name) == "com.google.android.gms.unstable";
-
-                        env->ReleaseStringUTFChars(args->nice_name, name);
-
-                        if (isGmsUnstable) {
-
-                            long dexSize = 0, jsonSize = 0;
-
-                            int fd = api->connectCompanion();
-
-                            read(fd, &dexSize, sizeof(long));
-                            read(fd, &jsonSize, sizeof(long));
-
-                            LOGD("Dex file size: %ld", dexSize);
-                            LOGD("Json file size: %ld", jsonSize);
-
-                            if (dexSize > 0 && jsonSize > 0) {
-
-                                dexVector.resize(dexSize);
-                                read(fd, dexVector.data(), dexSize);
-
-                                std::vector<uint8_t> jsonVector;
-
-                                jsonVector.resize(jsonSize);
-                                read(fd, jsonVector.data(), jsonSize);
-
-                                json = nlohmann::json::parse(jsonVector, nullptr, false, true);
-                            }
-
-                            close(fd);
-
-                            return;
-                        }
-                    }
-                }
-            }
+        if (!args) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
         }
 
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        const char *rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+
+        if (!rawDir) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        const char *rawName = env->GetStringUTFChars(args->nice_name, nullptr);
+
+        if (!rawName) {
+            env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        std::string dir(rawDir);
+        std::string name(rawName);
+
+        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+        env->ReleaseStringUTFChars(args->nice_name, rawName);
+
+        if (!dir.ends_with("/com.google.android.gms")) {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
+
+        if (name != "com.google.android.gms.unstable") {
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        long dexSize = 0, jsonSize = 0;
+
+        int fd = api->connectCompanion();
+
+        read(fd, &dexSize, sizeof(long));
+        read(fd, &jsonSize, sizeof(long));
+
+        LOGD("Dex file size: %ld", dexSize);
+        LOGD("Json file size: %ld", jsonSize);
+
+        if (dexSize < 1 || jsonSize < 1) {
+            close(fd);
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        dexVector.resize(dexSize);
+        read(fd, dexVector.data(), dexSize);
+
+        std::vector<uint8_t> jsonVector;
+
+        jsonVector.resize(jsonSize);
+        read(fd, jsonVector.data(), jsonSize);
+
+        close(fd);
+
+        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+
+        if (json.contains("PROPS")) {
+            PROPS = json["PROPS"];
+            json.erase("PROPS");
+        }
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
@@ -168,6 +166,7 @@ private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
+    nlohmann::json json;
 
     void injectDex() {
         LOGD("get system classloader");

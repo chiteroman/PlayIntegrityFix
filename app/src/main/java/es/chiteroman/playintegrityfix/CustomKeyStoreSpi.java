@@ -3,6 +3,7 @@ package es.chiteroman.playintegrityfix;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.security.Key;
 import java.security.KeyStoreException;
 import java.security.KeyStoreSpi;
@@ -10,6 +11,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.Locale;
@@ -22,13 +24,32 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
         return keyStoreSpi.engineGetKey(alias, password);
     }
 
+    private static String getProcessName() {
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+
+            Method method = activityThread.getDeclaredMethod("currentProcessName");
+
+            method.setAccessible(true);
+
+            return (String) method.invoke(null);
+
+        } catch (Throwable t) {
+            EntryPoint.LOG(t.toString());
+        }
+        return null;
+    }
+
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
 
-        for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
-            if (element.getClassName().toLowerCase(Locale.US).contains("droidguard")) {
-                throw new UnsupportedOperationException();
-            }
+        boolean droidGuard = Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(e -> e.getClassName().toLowerCase(Locale.US).contains("droidguard"));
+
+        String processName = getProcessName();
+
+        if (processName != null && droidGuard && processName.equals("com.google.android.gms.unstable")) {
+            EntryPoint.LOG("DroidGuard call detected. Throw exception!");
+            throw new UnsupportedOperationException();
         }
 
         return keyStoreSpi.engineGetCertificateChain(alias);

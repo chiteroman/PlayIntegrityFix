@@ -1,11 +1,22 @@
 {
-    "PRODUCT": "griffin_retcn",
-    "DEVICE": "griffin",
     "MANUFACTURER": "motorola",
+    "MODEL": "XT1575",
+    "FINGERPRINT": "motorola/clark_retus/clark:6.0/MPHS24.49-18-8/4:user/release-keys",
     "BRAND": "motorola",
-    "MODEL": "XT1650-05",
-    "FINGERPRINT": "motorola/griffin_retcn/griffin:6.0.1/MCC24.246-37/42:user/release-keys",
-    "SECURITY_PATCH": "2016-07-01",
-    "ID": "MCC24.246-37",
-    "FIRST_API_LEVEL": 21
+    "PRODUCT": "clark_retus",
+    "DEVICE": "clark",
+    "RELEASE": "6.0",
+    "ID": "MPHS24.49-18-8",
+    "INCREMENTAL": "4",
+    "TYPE": "user",
+    "TAGS": "release-keys",
+    "SECURITY_PATCH": "2016-09-01",
+    "PROPS": {
+        "*api_level": "25",
+        "*.security_patch": "2016-09-01",
+        "*.build.id": "MPHS24.49-18-8",
+        "*.fingerprint": "motorola/clark_retus/clark:6.0/MPHS24.49-18-8/4:user/release-keys",
+        "sys.usb.state": "none",
+        "ro.secureboot.lockstate": "locked"
+    }
 }
