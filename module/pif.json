@@ -1,22 +1,15 @@
 {
-    "MANUFACTURER": "motorola",
-    "MODEL": "XT1575",
-    "FINGERPRINT": "motorola/clark_retus/clark:6.0/MPHS24.49-18-8/4:user/release-keys",
-    "BRAND": "motorola",
-    "PRODUCT": "clark_retus",
-    "DEVICE": "clark",
-    "RELEASE": "6.0",
-    "ID": "MPHS24.49-18-8",
-    "INCREMENTAL": "4",
+    "MANUFACTURER": "Google",
+    "MODEL": "Pixel",
+    "FINGERPRINT": "google/sailfish/sailfish:8.1.0/OPM1.171019.011/4448085:user/release-keys",
+    "BRAND": "google",
+    "PRODUCT": "sailfish",
+    "DEVICE": "sailfish",
+    "RELEASE": "8.1.0",
+    "ID": "OPM1.171019.011",
+    "INCREMENTAL": "4448085",
     "TYPE": "user",
     "TAGS": "release-keys",
-    "SECURITY_PATCH": "2016-09-01",
-    "PROPS": {
-        "*api_level": "25",
-        "*.security_patch": "2016-09-01",
-        "*.build.id": "MPHS24.49-18-8",
-        "*.fingerprint": "motorola/clark_retus/clark:6.0/MPHS24.49-18-8/4:user/release-keys",
-        "sys.usb.state": "none",
-        "ro.secureboot.lockstate": "locked"
-    }
+    "SECURITY_PATCH": "2017-12-05",
+    "DEVICE_INITIAL_SDK_INT": "25"
 }

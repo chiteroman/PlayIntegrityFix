@@ -1,7 +1,6 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
-#include <regex>
 #include "dobby.h"
 #include "json.hpp"
 #include "zygisk.hpp"
@@ -14,7 +13,7 @@
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static nlohmann::json PROPS;
+static std::string DEVICE_INITIAL_SDK_INT, SECURITY_PATCH, ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -24,20 +23,16 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
 
-    std::string prop(name);
+    std::string_view prop(name);
 
-    for (auto &[key, val]: PROPS.items()) {
-        if (key.starts_with('*')) {
-            if (prop.ends_with(key.substr(1))) {
-                value = val.get<std::string>().c_str();
-                break;
-            }
-        } else {
-            if (prop == key) {
-                value = val.get<std::string>().c_str();
-                break;
-            }
-        }
+    if (prop.ends_with("api_level") && !DEVICE_INITIAL_SDK_INT.empty()) {
+        value = DEVICE_INITIAL_SDK_INT.c_str();
+    } else if (prop.ends_with(".security_patch") && !SECURITY_PATCH.empty()) {
+        value = SECURITY_PATCH.c_str();
+    } else if (prop.ends_with(".id") && !ID.empty()) {
+        value = ID.c_str();
+    } else if (prop == "sys.usb.state") {
+        value = "none";
     }
 
     if (!prop.starts_with("persist") && !prop.starts_with("cache") && !prop.starts_with("debug")) {
@@ -143,15 +138,12 @@ public:
         close(fd);
 
         json = nlohmann::json::parse(jsonVector, nullptr, false, true);
-
-        if (json.contains("PROPS")) {
-            PROPS = json["PROPS"];
-            json.erase("PROPS");
-        }
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty() || json.empty()) return;
+
+        parseJson();
 
         injectDex();
 
@@ -167,6 +159,19 @@ private:
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     nlohmann::json json;
+
+    void parseJson() {
+        if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+            DEVICE_INITIAL_SDK_INT = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+            json.erase("DEVICE_INITIAL_SDK_INT"); // You can't modify field value
+        }
+        if (json.contains("SECURITY_PATCH")) {
+            SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+        }
+        if (json.contains("ID")) {
+            ID = json["ID"].get<std::string>();
+        }
+    }
 
     void injectDex() {
         LOGD("get system classloader");
