@@ -2,6 +2,12 @@
 
 This module tries to fix Play Integrity and SafetyNet verdicts to get a valid attestation.
 
+## NOTE
+If you use a custom ROM, make sure it is signed with the maintainer's private keys, otherwise, you will never be able to pass the Device verdict.
+
+This module is not made to hide the root, nor to avoid detections in other apps. It only serves to obtain the Device verdict in the Play Integrity tests and certify your device.
+All issues created to report a non-Google app not working will be closed without notice.
+
 You will need root and Zygisk, so you must choose ONE of this three setups:
 
 - [Magisk](https://github.com/topjohnwu/Magisk) with Zygisk enabled.
