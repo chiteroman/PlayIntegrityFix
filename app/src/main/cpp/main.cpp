@@ -19,6 +19,32 @@ typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
 static T_Callback o_callback = nullptr;
 
+ssize_t xread(int fd, void *buffer, size_t count) {
+    ssize_t total = 0;
+    char *buf = (char *)buffer;
+    while (count > 0) {
+        ssize_t ret = read(fd, buf, count);
+        if (ret < 0) return -1;
+        buf += ret;
+        total += ret;
+        count -= ret;
+    }
+    return total;
+}
+
+ssize_t xwrite(int fd, void *buffer, size_t count) {
+    ssize_t total = 0;
+    char *buf = (char *)buffer;
+    while (count > 0) {
+        ssize_t ret = write(fd, buf, count);
+        if (ret < 0) return -1;
+        buf += ret;
+        total += ret;
+        count -= ret;
+    }
+    return total;
+}
+
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
     if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
@@ -115,8 +141,8 @@ public:
 
         int fd = api->connectCompanion();
 
-        read(fd, &dexSize, sizeof(long));
-        read(fd, &jsonSize, sizeof(long));
+        xread(fd, &dexSize, sizeof(long));
+        xread(fd, &jsonSize, sizeof(long));
 
         LOGD("Dex file size: %ld", dexSize);
         LOGD("Json file size: %ld", jsonSize);
@@ -128,12 +154,12 @@ public:
         }
 
         dexVector.resize(dexSize);
-        read(fd, dexVector.data(), dexSize);
+        xread(fd, dexVector.data(), dexSize);
 
         std::vector<uint8_t> jsonVector;
 
         jsonVector.resize(jsonSize);
-        read(fd, jsonVector.data(), jsonSize);
+        xread(fd, jsonVector.data(), jsonSize);
 
         close(fd);
 
@@ -236,11 +262,11 @@ static void companion(int fd) {
     long dexSize = dexVector.size();
     long jsonSize = jsonVector.size();
 
-    write(fd, &dexSize, sizeof(long));
-    write(fd, &jsonSize, sizeof(long));
+    xwrite(fd, &dexSize, sizeof(long));
+    xwrite(fd, &jsonSize, sizeof(long));
 
-    write(fd, dexVector.data(), dexSize);
-    write(fd, jsonVector.data(), jsonSize);
+    xwrite(fd, dexVector.data(), dexSize);
+    xwrite(fd, jsonVector.data(), jsonSize);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
