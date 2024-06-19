@@ -7,7 +7,6 @@ If not, try removing /data/adb/pif.json file.
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-# v15.9.9
+# v16.0
 
-- MEETS_DEVICE_INTEGRITY is green again ✅
-- Refine code logic
+- WORKING TEE = STRONG PASS

@@ -16,8 +16,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15990
-        versionName = "v15.9.9"
+        versionCode = 16000
+        versionName = "v16.0"
         multiDexEnabled = false
 
         packaging {
@@ -66,6 +66,7 @@ android {
 
 dependencies {
     implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
+    implementation("com.madgag.spongycastle:bcpkix-jdk15on:1.58.0.0")
 }
 
 tasks.register("updateModuleProp") {
@@ -93,7 +94,7 @@ tasks.register("copyFiles") {
         val dexFile = project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
         val soDir = project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/stripReleaseDebugSymbols/out/lib")
 
-        dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
+//        dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 
         soDir.walk().filter { it.isFile && it.extension == "so" }.forEach { soFile ->
             val abiFolder = soFile.parentFile.name

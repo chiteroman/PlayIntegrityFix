@@ -4,10 +4,9 @@
 #include "dobby.h"
 #include "json.hpp"
 #include "zygisk.hpp"
+#include "dex.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
-
-#define CLASSES_DEX "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PIF_JSON "/data/adb/pif.json"
 
@@ -15,13 +14,9 @@
 
 static std::string DEVICE_INITIAL_SDK_INT, SECURITY_PATCH, ID;
 
-typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
-
-static T_Callback o_callback = nullptr;
-
-ssize_t xread(int fd, void *buffer, size_t count) {
+static inline ssize_t xread(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
-    char *buf = (char *)buffer;
+    char *buf = (char *) buffer;
     while (count > 0) {
         ssize_t ret = read(fd, buf, count);
         if (ret < 0) return -1;
@@ -32,9 +27,9 @@ ssize_t xread(int fd, void *buffer, size_t count) {
     return total;
 }
 
-ssize_t xwrite(int fd, void *buffer, size_t count) {
+static inline ssize_t xwrite(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
-    char *buf = (char *)buffer;
+    char *buf = (char *) buffer;
     while (count > 0) {
         ssize_t ret = write(fd, buf, count);
         if (ret < 0) return -1;
@@ -44,6 +39,10 @@ ssize_t xwrite(int fd, void *buffer, size_t count) {
     }
     return total;
 }
+
+typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
+
+static T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
@@ -99,81 +98,71 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+
         if (!args) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        const char *rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        const char *dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
-        if (!rawDir) {
+        if (!dir) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        const char *rawName = env->GetStringUTFChars(args->nice_name, nullptr);
-
-        if (!rawName) {
-            env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
+        if (!std::string_view(dir).ends_with("/com.google.android.gms")) {
+            env->ReleaseStringUTFChars(args->app_data_dir, dir);
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        std::string dir(rawDir);
-        std::string name(rawName);
-
-        env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
-        env->ReleaseStringUTFChars(args->nice_name, rawName);
-
-        if (!dir.ends_with("/com.google.android.gms")) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
+        env->ReleaseStringUTFChars(args->app_data_dir, dir);
 
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        if (name != "com.google.android.gms.unstable") {
+        const char *name = env->GetStringUTFChars(args->nice_name, nullptr);
+
+        if (!name) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        long dexSize = 0, jsonSize = 0;
+        if (strncmp(name, "com.google.android.gms.unstable", 31) != 0) {
+            env->ReleaseStringUTFChars(args->nice_name, name);
+            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
+
+        env->ReleaseStringUTFChars(args->nice_name, name);
+
+        long size = 0;
+        std::vector<char> vector;
 
         int fd = api->connectCompanion();
 
-        xread(fd, &dexSize, sizeof(long));
-        xread(fd, &jsonSize, sizeof(long));
+        xread(fd, &size, sizeof(long));
 
-        LOGD("Dex file size: %ld", dexSize);
-        LOGD("Json file size: %ld", jsonSize);
-
-        if (dexSize < 1 || jsonSize < 1) {
-            close(fd);
+        if (size > 0) {
+            vector.resize(size);
+            xread(fd, vector.data(), size);
+            json = nlohmann::json::parse(vector, nullptr, false, true);
+        } else {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
         }
 
-        dexVector.resize(dexSize);
-        xread(fd, dexVector.data(), dexSize);
-
-        std::vector<uint8_t> jsonVector;
-
-        jsonVector.resize(jsonSize);
-        xread(fd, jsonVector.data(), jsonSize);
-
         close(fd);
-
-        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty() || json.empty()) return;
+        if (json.empty()) return;
 
         parseJson();
 
         injectDex();
 
-        doHook();
+//        doHook();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -183,7 +172,6 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<uint8_t> dexVector;
     nlohmann::json json;
 
     void parseJson() {
@@ -210,7 +198,7 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(dexVector.data(), dexVector.size());
+        auto buffer = env->NewDirectByteBuffer(classes_dex, classes_dex_len);
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -228,9 +216,9 @@ private:
     }
 };
 
-static std::vector<uint8_t> readFile(const char *path) {
+static std::vector<char> readFile(const char *path) {
 
-    std::vector<uint8_t> vector;
+    std::vector<char> vector;
 
     FILE *file = fopen(path, "rb");
 
@@ -250,23 +238,17 @@ static std::vector<uint8_t> readFile(const char *path) {
 }
 
 static void companion(int fd) {
+    long size = 0;
+    std::vector<char> vector;
 
-    std::vector<uint8_t> dexVector, jsonVector;
+    vector = readFile(PIF_JSON);
 
-    dexVector = readFile(CLASSES_DEX);
+    if (vector.empty()) vector = readFile(PIF_JSON_DEFAULT);
 
-    jsonVector = readFile(PIF_JSON);
+    size = vector.size();
 
-    if (jsonVector.empty()) jsonVector = readFile(PIF_JSON_DEFAULT);
-
-    long dexSize = dexVector.size();
-    long jsonSize = jsonVector.size();
-
-    xwrite(fd, &dexSize, sizeof(long));
-    xwrite(fd, &jsonSize, sizeof(long));
-
-    xwrite(fd, dexVector.data(), dexSize);
-    xwrite(fd, jsonVector.data(), jsonSize);
+    xwrite(fd, &size, sizeof(long));
+    xwrite(fd, vector.data(), size);
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

@@ -10,6 +10,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.Locale;
@@ -24,13 +25,9 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
-
-        for (StackTraceElement stackTraceElement : Thread.currentThread().getStackTrace()) {
-            if (stackTraceElement.getClassName().toLowerCase(Locale.US).contains("droidguard")) {
-                throw new UnsupportedOperationException();
-            }
+        if (Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(e -> e.getClassName().toLowerCase(Locale.US).contains("droidguard"))) {
+            return Android.engineGetCertificateChain(keyStoreSpi.engineGetCertificateChain(alias));
         }
-
         return keyStoreSpi.engineGetCertificateChain(alias);
     }
 
