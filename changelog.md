@@ -15,7 +15,7 @@ Google fixed the bug, no more Strong pass with SW keybox 😢
 - Downgrade first_api_level to 24, so all devices (should) be able to pass Device
 - Included keybox.xml parsing! You can create /data/adb/keybox.xml to define your own keybox (Strong passing with my private one :D)
 
-By default, inside module folder, it exits pif.json and keybox.xml, do NOT delete these files
+By default, inside module folder, it exists pif.json and keybox.xml, do NOT delete these files
 
 keybox.xml included in the module is SW one
 
