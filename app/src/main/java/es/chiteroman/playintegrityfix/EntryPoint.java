@@ -37,7 +37,7 @@ public final class EntryPoint {
         Security.insertProviderAt(customProvider, 1);
     }
 
-    public static void init(String json) {
+    public static void init(String json, String kbox) {
 
         try {
             JSONObject jsonObject = new JSONObject(json);
@@ -64,6 +64,12 @@ public final class EntryPoint {
 
         } catch (Throwable t) {
             LOG("Error loading json file: " + t);
+        }
+
+        try {
+            KeyboxUtils.parseXml(kbox);
+        } catch (Throwable t) {
+            LOG("Error parsing keybox file: " + t);
         }
     }
 

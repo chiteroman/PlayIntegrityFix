@@ -1,7 +1,7 @@
 id=playintegrityfix
-name=Play Integrity Fix (STRONG)
-version=v16.0
-versionCode=16000
+name=Play Integrity Fix
+version=v16.3
+versionCode=16300
 author=chiteroman
-description=WORKING TEE = STRONG PASS | THANKS GOOGLE
+description=Universal modular fix for Play Integrity (and SafetyNet) on devices running Android 8-15
 updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json

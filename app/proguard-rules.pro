@@ -1,3 +1,4 @@
 -keep class es.chiteroman.playintegrityfix.EntryPoint {public <methods>;}
 -keep class es.chiteroman.playintegrityfix.CustomProvider
 -keep class es.chiteroman.playintegrityfix.CustomKeyStoreSpi
+-keep class es.chiteroman.playintegrityfix.KeyboxUtils

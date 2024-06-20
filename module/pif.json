@@ -11,5 +11,5 @@
     "TYPE": "user",
     "TAGS": "release-keys",
     "SECURITY_PATCH": "2017-12-05",
-    "DEVICE_INITIAL_SDK_INT": "25"
+    "DEVICE_INITIAL_SDK_INT": "24"
 }

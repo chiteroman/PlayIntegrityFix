@@ -1,20 +1,24 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
+#include <fstream>
 #include "dobby.h"
 #include "json.hpp"
 #include "zygisk.hpp"
-#include "dex.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
+
+#define DEX_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PIF_JSON "/data/adb/pif.json"
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static std::string DEVICE_INITIAL_SDK_INT, SECURITY_PATCH, ID;
+#define KEYBOX_JSON "/data/adb/keybox.xml"
 
-static inline ssize_t xread(int fd, void *buffer, size_t count) {
+#define KEYBOX_JSON_DEFAULT "/data/adb/modules/playintegrityfix/keybox.xml"
+
+static ssize_t xread(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
     char *buf = (char *) buffer;
     while (count > 0) {
@@ -27,7 +31,7 @@ static inline ssize_t xread(int fd, void *buffer, size_t count) {
     return total;
 }
 
-static inline ssize_t xwrite(int fd, void *buffer, size_t count) {
+static ssize_t xwrite(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
     char *buf = (char *) buffer;
     while (count > 0) {
@@ -40,6 +44,8 @@ static inline ssize_t xwrite(int fd, void *buffer, size_t count) {
     return total;
 }
 
+static std::string DEVICE_INITIAL_SDK_INT;
+
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
 static T_Callback o_callback = nullptr;
@@ -50,17 +56,8 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     std::string_view prop(name);
 
-    if (prop.ends_with("api_level") && !DEVICE_INITIAL_SDK_INT.empty()) {
+    if (prop.ends_with("first_api_level") && !DEVICE_INITIAL_SDK_INT.empty()) {
         value = DEVICE_INITIAL_SDK_INT.c_str();
-    } else if (prop.ends_with(".security_patch") && !SECURITY_PATCH.empty()) {
-        value = SECURITY_PATCH.c_str();
-    } else if (prop.ends_with(".id") && !ID.empty()) {
-        value = ID.c_str();
-    } else if (prop == "sys.usb.state") {
-        value = "none";
-    }
-
-    if (!prop.starts_with("persist") && !prop.starts_with("cache") && !prop.starts_with("debug")) {
         LOGD("[%s]: %s", name, value);
     }
 
@@ -98,71 +95,81 @@ public:
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
 
-        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-
         if (!args) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        const char *dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        auto dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
         if (!dir) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        if (!std::string_view(dir).ends_with("/com.google.android.gms")) {
-            env->ReleaseStringUTFChars(args->app_data_dir, dir);
+        bool isGms = std::string_view(dir).ends_with("/com.google.android.gms");
+
+        env->ReleaseStringUTFChars(args->app_data_dir, dir);
+
+        if (!isGms) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        env->ReleaseStringUTFChars(args->app_data_dir, dir);
-
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        const char *name = env->GetStringUTFChars(args->nice_name, nullptr);
+        auto name = env->GetStringUTFChars(args->nice_name, nullptr);
 
         if (!name) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        if (strncmp(name, "com.google.android.gms.unstable", 31) != 0) {
-            env->ReleaseStringUTFChars(args->nice_name, name);
+        bool isGmsUnstable = std::string_view(name) == "com.google.android.gms.unstable";
+
+        env->ReleaseStringUTFChars(args->nice_name, name);
+
+        if (!isGmsUnstable) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
 
-        env->ReleaseStringUTFChars(args->nice_name, name);
-
-        long size = 0;
-        std::vector<char> vector;
-
         int fd = api->connectCompanion();
 
-        xread(fd, &size, sizeof(long));
+        int dexSize = 0, jsonSize = 0, keyboxSize = 0;
+        std::vector<char> jsonVector, keyboxVector;
 
-        if (size > 0) {
-            vector.resize(size);
-            xread(fd, vector.data(), size);
-            json = nlohmann::json::parse(vector, nullptr, false, true);
-        } else {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-        }
+        xread(fd, &dexSize, sizeof(int));
+        xread(fd, &jsonSize, sizeof(int));
+        xread(fd, &keyboxSize, sizeof(int));
+
+        dexVector.resize(dexSize);
+        xread(fd, dexVector.data(), dexSize);
+
+        jsonVector.resize(jsonSize);
+        xread(fd, jsonVector.data(), jsonSize);
+
+        keyboxVector.resize(keyboxSize);
+        xread(fd, keyboxVector.data(), keyboxSize);
 
         close(fd);
+
+        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+
+        keyboxString = std::string(keyboxVector.cbegin(), keyboxVector.cend());
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (json.empty()) return;
+        if (dexVector.empty() || json.empty()) return;
 
-        parseJson();
+        if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+            DEVICE_INITIAL_SDK_INT = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+            json.erase("DEVICE_INITIAL_SDK_INT"); // You can't modify field value
+        }
+
+        doHook();
 
         injectDex();
-
-//        doHook();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -172,20 +179,9 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
+    std::vector<char> dexVector;
     nlohmann::json json;
-
-    void parseJson() {
-        if (json.contains("DEVICE_INITIAL_SDK_INT")) {
-            DEVICE_INITIAL_SDK_INT = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
-            json.erase("DEVICE_INITIAL_SDK_INT"); // You can't modify field value
-        }
-        if (json.contains("SECURITY_PATCH")) {
-            SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
-        }
-        if (json.contains("ID")) {
-            ID = json["ID"].get<std::string>();
-        }
-    }
+    std::string keyboxString;
 
     void injectDex() {
         LOGD("get system classloader");
@@ -198,7 +194,7 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(classes_dex, classes_dex_len);
+        auto buffer = env->NewDirectByteBuffer(dexVector.data(), dexVector.size());
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -210,45 +206,47 @@ private:
         auto entryPointClass = (jclass) entryClassObj;
 
         LOGD("call init");
-        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
-        auto str = env->NewStringUTF(json.dump().c_str());
-        env->CallStaticVoidMethod(entryPointClass, entryInit, str);
+        auto entryInit = env->GetStaticMethodID(entryPointClass, "init",
+                                                "(Ljava/lang/String;Ljava/lang/String;)V");
+        auto jsonStr = env->NewStringUTF(json.dump().c_str());
+        auto keyboxStr = env->NewStringUTF(keyboxString.c_str());
+        env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr, keyboxStr);
     }
 };
 
-static std::vector<char> readFile(const char *path) {
+static std::vector<char> readFile(const std::string &path) {
 
-    std::vector<char> vector;
+    std::ifstream ifs(path);
 
-    FILE *file = fopen(path, "rb");
-
-    if (file) {
-        fseek(file, 0, SEEK_END);
-        long size = ftell(file);
-        fseek(file, 0, SEEK_SET);
-
-        vector.resize(size);
-        fread(vector.data(), 1, size, file);
-        fclose(file);
-    } else {
-        LOGD("Couldn't read %s file!", path);
+    if (!ifs || ifs.bad()) {
+        return std::vector<char>();
     }
 
-    return vector;
+    return std::vector<char>((std::istreambuf_iterator<char>(ifs)),
+                             std::istreambuf_iterator<char>());
 }
 
 static void companion(int fd) {
-    long size = 0;
-    std::vector<char> vector;
 
-    vector = readFile(PIF_JSON);
+    auto dex = readFile(DEX_PATH);
 
-    if (vector.empty()) vector = readFile(PIF_JSON_DEFAULT);
+    auto json = readFile(PIF_JSON);
+    if (json.empty()) json = readFile(PIF_JSON_DEFAULT);
 
-    size = vector.size();
+    auto keybox = readFile(KEYBOX_JSON);
+    if (keybox.empty()) keybox = readFile(KEYBOX_JSON_DEFAULT);
 
-    xwrite(fd, &size, sizeof(long));
-    xwrite(fd, vector.data(), size);
+    int dexSize = dex.size();
+    int jsonSize = json.size();
+    int keyboxSize = keybox.size();
+
+    xwrite(fd, &dexSize, sizeof(int));
+    xwrite(fd, &jsonSize, sizeof(int));
+    xwrite(fd, &keyboxSize, sizeof(int));
+
+    xwrite(fd, dex.data(), dexSize * sizeof(char));
+    xwrite(fd, json.data(), jsonSize * sizeof(char));
+    xwrite(fd, keybox.data(), keyboxSize * sizeof(char));
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

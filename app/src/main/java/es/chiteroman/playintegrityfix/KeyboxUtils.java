@@ -1,6 +1,7 @@
 package es.chiteroman.playintegrityfix;
 
 import android.security.keystore.KeyProperties;
+import android.text.TextUtils;
 
 import org.spongycastle.asn1.ASN1Boolean;
 import org.spongycastle.asn1.ASN1Encodable;
@@ -23,39 +24,84 @@ import org.spongycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.spongycastle.operator.ContentSigner;
 import org.spongycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.spongycastle.util.io.pem.PemReader;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 
-public final class Android {
-    private static final PEMKeyPair EC, RSA;
+public final class KeyboxUtils {
     private static final ASN1ObjectIdentifier OID = new ASN1ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17");
-    private static final List<Certificate> EC_CERTS = new ArrayList<>();
-    private static final List<Certificate> RSA_CERTS = new ArrayList<>();
+    private static final LinkedList<Certificate> EC_CERTS = new LinkedList<>();
+    private static final LinkedList<Certificate> RSA_CERTS = new LinkedList<>();
     private static final CertificateFactory certificateFactory;
+    private static PEMKeyPair EC, RSA;
 
     static {
         try {
             certificateFactory = CertificateFactory.getInstance("X.509");
+        } catch (CertificateException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-            EC = parseKeyPair(Keybox.EC.PRIVATE_KEY);
-            EC_CERTS.add(parseCert(Keybox.EC.CERTIFICATE_1));
-            EC_CERTS.add(parseCert(Keybox.EC.CERTIFICATE_2));
+    public static void parseXml(String kbox) throws Throwable {
+        if (TextUtils.isEmpty(kbox)) return;
 
-            RSA = parseKeyPair(Keybox.RSA.PRIVATE_KEY);
-            RSA_CERTS.add(parseCert(Keybox.RSA.CERTIFICATE_1));
-            RSA_CERTS.add(parseCert(Keybox.RSA.CERTIFICATE_2));
-        } catch (Throwable t) {
-            EntryPoint.LOG(t.toString());
-            throw new RuntimeException(t);
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document doc = builder.parse(new ByteArrayInputStream(kbox.getBytes()));
+
+        doc.getDocumentElement().normalize();
+
+        NodeList keyboxList = doc.getElementsByTagName("Keybox");
+        Node keyboxNode = keyboxList.item(0);
+        if (keyboxNode.getNodeType() == Node.ELEMENT_NODE) {
+            Element keyboxElement = (Element) keyboxNode;
+
+            NodeList keyList = keyboxElement.getElementsByTagName("Key");
+            for (int j = 0; j < keyList.getLength(); j++) {
+                Element keyElement = (Element) keyList.item(j);
+                String algorithm = keyElement.getAttribute("algorithm");
+
+                NodeList privateKeyList = keyElement.getElementsByTagName("PrivateKey");
+                if (privateKeyList.getLength() > 0) {
+                    Element privateKeyElement = (Element) privateKeyList.item(0);
+                    String privateKeyContent = privateKeyElement.getTextContent().trim();
+                    if ("ecdsa".equals(algorithm)) {
+                        EC = parseKeyPair(privateKeyContent);
+                    } else if ("rsa".equals(algorithm)) {
+                        RSA = parseKeyPair(privateKeyContent);
+                    }
+                }
+
+                NodeList certificateChainList = keyElement.getElementsByTagName("CertificateChain");
+                if (certificateChainList.getLength() > 0) {
+                    Element certificateChainElement = (Element) certificateChainList.item(0);
+
+                    NodeList certificateList = certificateChainElement.getElementsByTagName("Certificate");
+                    for (int k = 0; k < certificateList.getLength(); k++) {
+                        Element certificateElement = (Element) certificateList.item(k);
+                        String certificateContent = certificateElement.getTextContent().trim();
+                        if ("ecdsa".equals(algorithm)) {
+                            EC_CERTS.add(parseCert(certificateContent));
+                        } else if ("rsa".equals(algorithm)) {
+                            RSA_CERTS.add(parseCert(certificateContent));
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -72,7 +118,18 @@ public final class Android {
     }
 
     public static Certificate[] engineGetCertificateChain(Certificate[] caList) {
-        if (caList == null) throw new UnsupportedOperationException();
+        if (caList == null) {
+            EntryPoint.LOG("Certificate chain is null!");
+            throw new UnsupportedOperationException();
+        }
+        if (EC == null && RSA == null) {
+            EntryPoint.LOG("EC and RSA private keys are null!");
+            throw new UnsupportedOperationException();
+        }
+        if (EC_CERTS.isEmpty() && RSA_CERTS.isEmpty()) {
+            EntryPoint.LOG("EC and RSA certs are empty!");
+            throw new UnsupportedOperationException();
+        }
         try {
             X509Certificate leaf = (X509Certificate) certificateFactory.generateCertificate(new ByteArrayInputStream(caList[0].getEncoded()));
 
@@ -103,14 +160,17 @@ public final class Android {
             X509v3CertificateBuilder builder;
             ContentSigner signer;
 
-            if (KeyProperties.KEY_ALGORITHM_EC.equals(leaf.getPublicKey().getAlgorithm())) {
+            // Not all keyboxes have EC keys :)
+            if (EC != null && !EC_CERTS.isEmpty() && KeyProperties.KEY_ALGORITHM_EC.equals(leaf.getPublicKey().getAlgorithm())) {
+                EntryPoint.LOG("Using EC");
                 certificates = new LinkedList<>(EC_CERTS);
                 builder = new X509v3CertificateBuilder(new X509CertificateHolder(EC_CERTS.get(0).getEncoded()).getSubject(), holder.getSerialNumber(), holder.getNotBefore(), holder.getNotAfter(), holder.getSubject(), EC.getPublicKeyInfo());
                 signer = new JcaContentSignerBuilder(leaf.getSigAlgName()).build(new JcaPEMKeyConverter().getPrivateKey(EC.getPrivateKeyInfo()));
             } else {
+                EntryPoint.LOG("Using RSA");
                 certificates = new LinkedList<>(RSA_CERTS);
                 builder = new X509v3CertificateBuilder(new X509CertificateHolder(RSA_CERTS.get(0).getEncoded()).getSubject(), holder.getSerialNumber(), holder.getNotBefore(), holder.getNotAfter(), holder.getSubject(), RSA.getPublicKeyInfo());
-                signer = new JcaContentSignerBuilder(leaf.getSigAlgName()).build(new JcaPEMKeyConverter().getPrivateKey(RSA.getPrivateKeyInfo()));
+                signer = new JcaContentSignerBuilder("SHA256withRSA").build(new JcaPEMKeyConverter().getPrivateKey(RSA.getPrivateKeyInfo()));
             }
 
             byte[] verifiedBootKey = new byte[32];
@@ -151,6 +211,6 @@ public final class Android {
         } catch (Throwable t) {
             EntryPoint.LOG(t.toString());
         }
-        return caList;
+        throw new UnsupportedOperationException();
     }
 }

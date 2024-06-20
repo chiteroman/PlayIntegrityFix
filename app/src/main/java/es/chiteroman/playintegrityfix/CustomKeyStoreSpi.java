@@ -26,7 +26,7 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
         if (Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(e -> e.getClassName().toLowerCase(Locale.US).contains("droidguard"))) {
-            return Android.engineGetCertificateChain(keyStoreSpi.engineGetCertificateChain(alias));
+            return KeyboxUtils.engineGetCertificateChain(keyStoreSpi.engineGetCertificateChain(alias));
         }
         return keyStoreSpi.engineGetCertificateChain(alias);
     }
