@@ -16,11 +16,14 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16300
-        versionName = "v16.3"
+        versionCode = 16400
+        versionName = "v16.4"
         multiDexEnabled = false
 
         packaging {
+            resources {
+                excludes += "META-INF/**"
+            }
             jniLibs {
                 excludes += "**/liblog.so"
                 excludes += "**/libdobby.so"
@@ -33,7 +36,7 @@ android {
                 arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
                 arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
 
-                cppFlags += "-std=c++20"
+                cppFlags += "-std=c++2b"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
@@ -47,7 +50,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             multiDexEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            )
         }
     }
 
@@ -91,8 +96,10 @@ tasks.register("copyFiles") {
 
     doLast {
         val moduleFolder = project.rootDir.resolve("module")
-        val dexFile = project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
-        val soDir = project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/stripReleaseDebugSymbols/out/lib")
+        val dexFile =
+            project.layout.buildDirectory.get().asFile.resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
+        val soDir =
+            project.layout.buildDirectory.get().asFile.resolve("intermediates/stripped_native_libs/release/stripReleaseDebugSymbols/out/lib")
 
         dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 

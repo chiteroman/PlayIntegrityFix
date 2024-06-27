@@ -1,15 +1,15 @@
 {
-    "MANUFACTURER": "Google",
-    "MODEL": "Pixel",
-    "FINGERPRINT": "google/sailfish/sailfish:8.1.0/OPM1.171019.011/4448085:user/release-keys",
-    "BRAND": "google",
+    "ID": "OPM1.171019.011",
     "PRODUCT": "sailfish",
     "DEVICE": "sailfish",
-    "RELEASE": "8.1.0",
-    "ID": "OPM1.171019.011",
+    "BOARD": "",
+    "MANUFACTURER": "Google",
+    "BRAND": "google",
+    "MODEL": "Pixel",
+    "HARDWARE": "",
     "INCREMENTAL": "4448085",
-    "TYPE": "user",
-    "TAGS": "release-keys",
+    "RELEASE": "8.1.0",
     "SECURITY_PATCH": "2017-12-05",
-    "DEVICE_INITIAL_SDK_INT": "24"
+    "DEVICE_INITIAL_SDK_INT": "24",
+    "FINGERPRINT": "google/sailfish/sailfish:8.1.0/OPM1.171019.011/4448085:user/release-keys"
 }

@@ -7,16 +7,13 @@
 #include "zygisk.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "PIF", __VA_ARGS__)
 
 #define DEX_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define PIF_JSON "/data/adb/pif.json"
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
-
-#define KEYBOX_JSON "/data/adb/keybox.xml"
-
-#define KEYBOX_JSON_DEFAULT "/data/adb/modules/playintegrityfix/keybox.xml"
 
 static ssize_t xread(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
@@ -56,7 +53,7 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     std::string_view prop(name);
 
-    if (prop.ends_with("first_api_level") && !DEVICE_INITIAL_SDK_INT.empty()) {
+    if (prop.ends_with("first_api_level")) {
         value = DEVICE_INITIAL_SDK_INT.c_str();
         LOGD("[%s]: %s", name, value);
     }
@@ -76,6 +73,7 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
 }
 
 static void doHook() {
+
     void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
     if (handle == nullptr) {
         LOGD("Couldn't hook __system_property_read_callback");
@@ -136,38 +134,32 @@ public:
 
         int fd = api->connectCompanion();
 
-        int dexSize = 0, jsonSize = 0, keyboxSize = 0;
-        std::vector<char> jsonVector, keyboxVector;
+        int dexSize = 0, jsonSize = 0;
+        std::vector<char> jsonVector;
 
         xread(fd, &dexSize, sizeof(int));
         xread(fd, &jsonSize, sizeof(int));
-        xread(fd, &keyboxSize, sizeof(int));
 
         dexVector.resize(dexSize);
         xread(fd, dexVector.data(), dexSize);
 
-        jsonVector.resize(jsonSize);
-        xread(fd, jsonVector.data(), jsonSize);
-
-        keyboxVector.resize(keyboxSize);
-        xread(fd, keyboxVector.data(), keyboxSize);
+        if (jsonSize > 0) {
+            jsonVector.resize(jsonSize);
+            xread(fd, jsonVector.data(), jsonSize);
+            json = nlohmann::json::parse(jsonVector, nullptr, false, true);
+        }
 
         close(fd);
 
-        json = nlohmann::json::parse(jsonVector, nullptr, false, true);
-
-        keyboxString = std::string(keyboxVector.cbegin(), keyboxVector.cend());
+        LOGD("Dex file size: %d", dexSize);
+        LOGD("Json file size: %d", jsonSize);
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty() || json.empty()) return;
+        if (dexVector.empty()) return;
 
-        if (json.contains("DEVICE_INITIAL_SDK_INT")) {
-            DEVICE_INITIAL_SDK_INT = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
-            json.erase("DEVICE_INITIAL_SDK_INT"); // You can't modify field value
-        }
-
-        doHook();
+        if (needHook()) doHook();
+        else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
 
         injectDex();
     }
@@ -181,7 +173,25 @@ private:
     JNIEnv *env = nullptr;
     std::vector<char> dexVector;
     nlohmann::json json;
-    std::string keyboxString;
+
+    bool needHook() {
+        if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+            if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
+                DEVICE_INITIAL_SDK_INT = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+            } else if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
+                DEVICE_INITIAL_SDK_INT = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>());
+            } else {
+                LOGE("Couldn't parse DEVICE_INITIAL_SDK_INT from JSON file!");
+                return false;
+            }
+
+            // Value can't be modified, it's marked as SystemApi field
+            json.erase("DEVICE_INITIAL_SDK_INT");
+
+            return !DEVICE_INITIAL_SDK_INT.empty();
+        }
+        return false;
+    }
 
     void injectDex() {
         LOGD("get system classloader");
@@ -194,7 +204,8 @@ private:
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
                                           "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-        auto buffer = env->NewDirectByteBuffer(dexVector.data(), dexVector.size());
+        auto buffer = env->NewDirectByteBuffer(dexVector.data(),
+                                               static_cast<jlong>(dexVector.size()));
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
         LOGD("load class");
@@ -206,11 +217,9 @@ private:
         auto entryPointClass = (jclass) entryClassObj;
 
         LOGD("call init");
-        auto entryInit = env->GetStaticMethodID(entryPointClass, "init",
-                                                "(Ljava/lang/String;Ljava/lang/String;)V");
+        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
         auto jsonStr = env->NewStringUTF(json.dump().c_str());
-        auto keyboxStr = env->NewStringUTF(keyboxString.c_str());
-        env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr, keyboxStr);
+        env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr);
     }
 };
 
@@ -218,12 +227,9 @@ static std::vector<char> readFile(const std::string &path) {
 
     std::ifstream ifs(path);
 
-    if (!ifs || ifs.bad()) {
-        return std::vector<char>();
-    }
+    if (!ifs || ifs.bad()) return {};
 
-    return std::vector<char>((std::istreambuf_iterator<char>(ifs)),
-                             std::istreambuf_iterator<char>());
+    return {(std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>()};
 }
 
 static void companion(int fd) {
@@ -233,20 +239,17 @@ static void companion(int fd) {
     auto json = readFile(PIF_JSON);
     if (json.empty()) json = readFile(PIF_JSON_DEFAULT);
 
-    auto keybox = readFile(KEYBOX_JSON);
-    if (keybox.empty()) keybox = readFile(KEYBOX_JSON_DEFAULT);
-
-    int dexSize = dex.size();
-    int jsonSize = json.size();
-    int keyboxSize = keybox.size();
+    int dexSize = static_cast<int>(dex.size());
+    int jsonSize = static_cast<int>(json.size());
 
     xwrite(fd, &dexSize, sizeof(int));
     xwrite(fd, &jsonSize, sizeof(int));
-    xwrite(fd, &keyboxSize, sizeof(int));
 
     xwrite(fd, dex.data(), dexSize * sizeof(char));
-    xwrite(fd, json.data(), jsonSize * sizeof(char));
-    xwrite(fd, keybox.data(), keyboxSize * sizeof(char));
+
+    if (jsonSize > 0) {
+        xwrite(fd, json.data(), jsonSize * sizeof(char));
+    }
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

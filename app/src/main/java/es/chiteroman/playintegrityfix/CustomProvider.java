@@ -12,12 +12,11 @@ public final class CustomProvider extends Provider {
 
     @Override
     public synchronized Service getService(String type, String algorithm) {
-        EntryPoint.LOG(String.format("Service: '%s' | Algorithm: '%s'", type, algorithm));
-
-        Thread t = new Thread(EntryPoint::spoofFields);
-        t.setDaemon(true);
-        t.start();
-
+        if ("KeyStore".equals(type)) {
+            Thread t = new Thread(EntryPoint::spoofFields);
+            t.setDaemon(true);
+            t.start();
+        }
         return super.getService(type, algorithm);
     }
 }
