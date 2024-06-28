@@ -7,8 +7,9 @@ If not, try removing /data/adb/pif.json file.
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-# v16.4
+# v16.5
 
-- Misc improvements in code
-- Remove keybox.xml parsing due DroidGuard detections (better use [FrameworkPatch](https://github.com/chiteroman/FrameworkPatch))
-- Add BOARD and HARDWARE fields in json
+- Update hook framework: [Dobby](https://github.com/chiteroman/Dobby.git)
+- Fix Device not passing in few devices
+- Improve code
+- Reduce Zygisk libs size

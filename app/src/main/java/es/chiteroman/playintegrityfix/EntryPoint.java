@@ -41,27 +41,33 @@ public final class EntryPoint {
 
     public static void init(String json) {
 
-        try {
-            JSONObject jsonObject = new JSONObject(json);
+        if (TextUtils.isEmpty(json)) {
+            Log.e(TAG, "JSON is empty!");
+        } else {
+            try {
+                JSONObject jsonObject = new JSONObject(json);
 
-            jsonObject.keys().forEachRemaining(s -> {
-                try {
-                    String value = jsonObject.getString(s);
+                jsonObject.keys().forEachRemaining(s -> {
+                    try {
+                        if ("DEVICE_INITIAL_SDK_INT".equals(s)) return;
 
-                    if (TextUtils.isEmpty(value)) return;
+                        String value = jsonObject.getString(s);
 
-                    Field field = getFieldByName(s);
+                        if (TextUtils.isEmpty(value)) return;
 
-                    if (field == null) return;
+                        Field field = getFieldByName(s);
 
-                    map.put(field, value);
+                        if (field == null) return;
 
-                } catch (Throwable t) {
-                    Log.e(TAG, "Error parsing JSON", t);
-                }
-            });
-        } catch (Throwable t) {
-            Log.e(TAG, "Error parsing JSON", t);
+                        map.put(field, value);
+
+                    } catch (Throwable t) {
+                        Log.e(TAG, "Error parsing JSON", t);
+                    }
+                });
+            } catch (Throwable t) {
+                Log.e(TAG, "Error parsing JSON", t);
+            }
         }
 
         Log.i(TAG, "Fields ready to spoof: " + map.size());

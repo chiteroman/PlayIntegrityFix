@@ -16,8 +16,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16400
-        versionName = "v16.4"
+        versionCode = 16500
+        versionName = "v16.5"
         multiDexEnabled = false
 
         packaging {
@@ -34,9 +34,11 @@ android {
             cmake {
                 arguments += "-DANDROID_STL=none"
                 arguments += "-DCMAKE_BUILD_TYPE=MinSizeRel"
-                arguments += "-DPlugin.Android.BionicLinkerUtil=ON"
 
-                cppFlags += "-std=c++2b"
+                cFlags += "-w"
+                cppFlags += "-w"
+
+                cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
@@ -71,7 +73,6 @@ android {
 
 dependencies {
     implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
-    implementation("com.madgag.spongycastle:bcpkix-jdk15on:1.58.0.0")
 }
 
 tasks.register("updateModuleProp") {

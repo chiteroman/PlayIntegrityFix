@@ -33,9 +33,6 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate engineGetCertificate(String alias) {
-        if (Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(e -> e.getClassName().toLowerCase(Locale.US).contains("droidguard"))) {
-            throw new UnsupportedOperationException();
-        }
         return keyStoreSpi.engineGetCertificate(alias);
     }
 

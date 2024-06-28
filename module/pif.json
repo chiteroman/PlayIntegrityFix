@@ -10,6 +10,6 @@
     "INCREMENTAL": "4448085",
     "RELEASE": "8.1.0",
     "SECURITY_PATCH": "2017-12-05",
-    "DEVICE_INITIAL_SDK_INT": "24",
+    "DEVICE_INITIAL_SDK_INT": 24,
     "FINGERPRINT": "google/sailfish/sailfish:8.1.0/OPM1.171019.011/4448085:user/release-keys"
 }
