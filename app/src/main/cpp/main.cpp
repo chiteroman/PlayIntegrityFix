@@ -1,6 +1,7 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
+#include <map>
 #include "dobby.h"
 #include "json.hpp"
 #include "zygisk.hpp"
@@ -40,53 +41,44 @@ static ssize_t xwrite(int fd, void *buffer, size_t count) {
     return total;
 }
 
-static nlohmann::json json;
+static int verboseLogs = 0;
+
+static std::map<std::string, std::string> props;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static T_Callback o_callback = nullptr;
+static std::map<void *, T_Callback> callbacks;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr) return;
+    if (cookie == nullptr || name == nullptr || value == nullptr ||
+        !callbacks.contains(cookie))
+        return;
 
     std::string_view prop(name);
 
-    if (prop.ends_with("api_level") && json.contains("DEVICE_INITIAL_SDK_INT") &&
-        !json["DEVICE_INITIAL_SDK_INT"].empty()) {
+    if (prop == "init.svc.adbd") {
+        value = "stopped";
+    } else if (prop == "sys.usb.state") {
+        value = "mtp";
+    }
 
-        if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
-            value = json["DEVICE_INITIAL_SDK_INT"].get<std::string>().c_str();
-        } else if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
-            value = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>()).c_str();
-        }
-
-    } else if (prop.ends_with(".build.id") && json.contains("ID") && !json["ID"].empty()) {
-
-        if (json["ID"].is_string()) {
-            value = json["ID"].get<std::string>().c_str();
-        }
-
-    } else if (prop.ends_with(".security_patch") && json.contains("SECURITY_PATCH") &&
-               !json["SECURITY_PATCH"].empty()) {
-
-        if (json["SECURITY_PATCH"].is_string()) {
-            value = json["SECURITY_PATCH"].get<std::string>().c_str();
-        }
-
-    } else if (prop.ends_with(".mod_device") && json.contains("PRODUCT") &&
-               !json["PRODUCT"].empty()) {
-
-        if (json["PRODUCT"].is_string()) {
-            value = json["PRODUCT"].get<std::string>().c_str();
+    if (props.contains(name)) {
+        value = props[name].c_str();
+        if (verboseLogs > 49) LOGD("[%s]: %s", name, value);
+    } else {
+        for (const auto &item: props) {
+            if (item.first.starts_with("*") && prop.ends_with(item.first.substr(1))) {
+                value = item.second.c_str();
+                if (verboseLogs > 49) LOGD("[%s]: %s", name, value);
+                break;
+            }
         }
     }
 
-    if (!prop.starts_with("cache") && !prop.starts_with("debug") && !prop.starts_with("persist")) {
-        LOGD("[%s]: %s", name, value);
-    }
+    if (verboseLogs > 99) LOGD("[%s]: %s", name, value);
 
-    return o_callback(cookie, name, value, serial);
+    return callbacks[cookie](cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
@@ -96,7 +88,7 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     if (pi == nullptr || callback == nullptr || cookie == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    o_callback = callback;
+    callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
@@ -185,6 +177,8 @@ public:
 
         LOGD("Dex file size: %d", dexSize);
         LOGD("Json file size: %d", jsonSize);
+
+        parseJSON();
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
@@ -203,6 +197,45 @@ private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
+    nlohmann::json json;
+
+    void parseJSON() {
+        if (json.empty()) return;
+
+        if (json.contains("verboseLogs") && !json["verboseLogs"].empty()) {
+            if (json["verboseLogs"].is_string()) {
+                verboseLogs = std::stoi(json["verboseLogs"].get<std::string>());
+            } else if (json["verboseLogs"].is_number_integer()) {
+                verboseLogs = json["verboseLogs"].get<int>();
+            }
+            json.erase("verboseLogs");
+        }
+
+        if (verboseLogs > 0) LOGD("Verbose logging (level %d) enabled", verboseLogs);
+
+        std::vector<std::string> removeKeys;
+
+        // Java fields are always uppercase, system props are always lowercase
+        for (const auto &item: json.items()) {
+            if (std::all_of(item.key().cbegin(), item.key().cend(), [](unsigned char c) {
+                return c == '_' || (std::isalpha(c) && std::isupper(c));
+            })) {
+                // Java field
+                if (verboseLogs > 99) LOGD("Skip Java field: %s", item.key().c_str());
+                continue;
+            }
+            // System prop
+            if (item.value().is_string()) {
+                props.insert({item.key(), item.value().get<std::string>()});
+                if (verboseLogs > 99) LOGD("Got system prop: %s", item.key().c_str());
+            }
+            removeKeys.push_back(item.key());
+        }
+
+        LOGD("Loaded %d props to spoof", props.size());
+
+        for (const auto &item: removeKeys) json.erase(item);
+    }
 
     void injectDex() {
         LOGD("get system classloader");

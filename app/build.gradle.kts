@@ -17,7 +17,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 16500
-        versionName = "v16.5"
+        versionName = "v16.6"
         multiDexEnabled = false
 
         packaging {
