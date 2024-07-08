@@ -34,7 +34,7 @@ After requesting an attestation in Play Integrity API you should get this result
 - MEETS_BASIC_INTEGRITY   ✅
 - MEETS_DEVICE_INTEGRITY  ✅
 - MEETS_STRONG_INTEGRITY  ❌
-- MEETS_VIRTUAL_INTEGRITY ❌
+- MEETS_VIRTUAL_INTEGRITY ❌ (this is for emulators only)
 
 You can know more about verdicts in this post: https://xdaforums.com/t/info-play-integrity-api-replacement-for-safetynet.4479337/
 
