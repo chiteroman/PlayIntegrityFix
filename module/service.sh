@@ -1,47 +1,42 @@
-#!/system/bin/sh
+MODPATH="${0%/*}"
+. $MODPATH/common_func.sh
 
-check_reset_prop() {
-  local NAME=$1
-  local EXPECTED=$2
-  local VALUE=$(resetprop $NAME)
-  [ -z $VALUE ] || [ $VALUE = $EXPECTED ] || resetprop $NAME $EXPECTED
-}
+# Conditional sensitive properties
 
-contains_reset_prop() {
-  local NAME=$1
-  local CONTAINS=$2
-  local NEWVAL=$3
-  [[ "$(resetprop $NAME)" = *"$CONTAINS"* ]] && resetprop $NAME $NEWVAL
-}
+# Magisk Recovery Mode
+resetprop_if_match ro.boot.mode recovery unknown
+resetprop_if_match ro.bootmode recovery unknown
+resetprop_if_match vendor.boot.mode recovery unknown
 
+# SELinux
+resetprop_if_diff ro.boot.selinux enforcing
+# use delete since it can be 0 or 1 for enforcing depending on OEM
+if [ -n "$(resetprop ro.build.selinux)" ]; then
+    resetprop --delete ro.build.selinux
+fi
+# use toybox to protect stat access time reading
+if [ "$(toybox cat /sys/fs/selinux/enforce)" = "0" ]; then
+    chmod 640 /sys/fs/selinux/enforce
+    chmod 440 /sys/fs/selinux/policy
+fi
+
+# Conditional late sensitive properties
+
+# must be set after boot_completed for various OEMs
 resetprop -w sys.boot_completed 0
 
-check_reset_prop "ro.boot.vbmeta.device_state" "locked"
-check_reset_prop "ro.boot.verifiedbootstate" "green"
-check_reset_prop "ro.boot.flash.locked" "1"
-check_reset_prop "ro.boot.veritymode" "enforcing"
-check_reset_prop "ro.boot.warranty_bit" "0"
-check_reset_prop "ro.warranty_bit" "0"
-check_reset_prop "ro.debuggable" "0"
-check_reset_prop "ro.force.debuggable" "0"
-check_reset_prop "ro.secure" "1"
-check_reset_prop "ro.adb.secure" "1"
-check_reset_prop "ro.build.type" "user"
-check_reset_prop "ro.build.tags" "release-keys"
-check_reset_prop "ro.vendor.boot.warranty_bit" "0"
-check_reset_prop "ro.vendor.warranty_bit" "0"
-check_reset_prop "vendor.boot.vbmeta.device_state" "locked"
-check_reset_prop "vendor.boot.verifiedbootstate" "green"
-check_reset_prop "sys.oem_unlock_allowed" "0"
+# SafetyNet/Play Integrity + OEM
+# avoid breaking Realme fingerprint scanners
+resetprop_if_diff ro.boot.flash.locked 1
+resetprop_if_diff ro.boot.realme.lockstate 1
+# avoid breaking Oppo fingerprint scanners
+resetprop_if_diff ro.boot.vbmeta.device_state locked
+# avoid breaking OnePlus display modes/fingerprint scanners
+resetprop_if_diff vendor.boot.verifiedbootstate green
+# avoid breaking OnePlus/Oppo fingerprint scanners on OOS/ColorOS 12+
+resetprop_if_diff ro.boot.verifiedbootstate green
+resetprop_if_diff ro.boot.veritymode enforcing
+resetprop_if_diff vendor.boot.vbmeta.device_state locked
 
-# MIUI specific
-check_reset_prop "ro.secureboot.lockstate" "locked"
-
-# Realme specific
-check_reset_prop "ro.boot.realmebootstate" "green"
-check_reset_prop "ro.boot.realme.lockstate" "1"
-
-# Hide that we booted from recovery when magisk is in recovery mode
-contains_reset_prop "ro.bootmode" "recovery" "unknown"
-contains_reset_prop "ro.boot.bootmode" "recovery" "unknown"
-contains_reset_prop "vendor.boot.bootmode" "recovery" "unknown"
+# Other
+resetprop_if_diff sys.oem_unlock_allowed 0
