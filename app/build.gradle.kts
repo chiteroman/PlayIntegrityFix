@@ -4,8 +4,8 @@ plugins {
 
 android {
     namespace = "es.chiteroman.playintegrityfix"
-    compileSdk = 34
-    ndkVersion = "26.3.11579264"
+    compileSdk = 35
+    ndkVersion = "27.0.12077973"
     buildToolsVersion = "34.0.0"
 
     buildFeatures {
@@ -15,17 +15,16 @@ android {
     defaultConfig {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 16500
         versionName = "v16.6"
         multiDexEnabled = false
 
         packaging {
             resources {
-                excludes += "META-INF/**"
+                excludes += "**"
             }
             jniLibs {
-                excludes += "**/liblog.so"
                 excludes += "**/libdobby.so"
             }
         }
@@ -38,7 +37,7 @@ android {
                 cFlags += "-w"
                 cppFlags += "-w"
 
-                cppFlags += "-std=c++20"
+                cppFlags += "-std=c++2c"
                 cppFlags += "-fno-exceptions"
                 cppFlags += "-fno-rtti"
                 cppFlags += "-fvisibility=hidden"
@@ -72,7 +71,7 @@ android {
 }
 
 dependencies {
-    implementation("dev.rikka.ndk.thirdparty:cxx:1.2.0")
+    implementation("org.lsposed.libcxx:libcxx:27.0.12077973")
 }
 
 tasks.register("updateModuleProp") {

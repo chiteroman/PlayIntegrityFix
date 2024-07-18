@@ -20,6 +20,12 @@ if [ -d "/data/adb/modules/MagiskHidePropsConf" ]; then
     ui_print "! WARNING, MagiskHidePropsConf module may cause issues with PIF."
 fi
 
+# tricky_store must be removed when flashing PIF
+if [ -d "/data/adb/modules/tricky_store" ]; then
+    touch "/data/adb/modules/tricky_store/remove"
+    ui_print "! tricky_store module removed!"
+fi
+
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
     mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"

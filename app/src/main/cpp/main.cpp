@@ -2,9 +2,10 @@
 #include <sys/system_properties.h>
 #include <unistd.h>
 #include <map>
-#include "dobby.h"
-#include "json.hpp"
+#include <filesystem>
 #include "zygisk.hpp"
+#include "json.hpp"
+#include "dobby.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "PIF", __VA_ARGS__)
@@ -15,35 +16,11 @@
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static ssize_t xread(int fd, void *buffer, size_t count) {
-    ssize_t total = 0;
-    char *buf = (char *) buffer;
-    while (count > 0) {
-        ssize_t ret = read(fd, buf, count);
-        if (ret < 0) return -1;
-        buf += ret;
-        total += ret;
-        count -= ret;
-    }
-    return total;
-}
+static std::string DEVICE_INITIAL_SDK_INT = "21";
+static std::string SECURITY_PATCH;
+static std::string BUILD_ID;
 
-static ssize_t xwrite(int fd, void *buffer, size_t count) {
-    ssize_t total = 0;
-    char *buf = (char *) buffer;
-    while (count > 0) {
-        ssize_t ret = write(fd, buf, count);
-        if (ret < 0) return -1;
-        buf += ret;
-        total += ret;
-        count -= ret;
-    }
-    return total;
-}
-
-static int verboseLogs = 0;
-
-static std::map<std::string, std::string> props;
+static bool DEBUG = false;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -59,51 +36,46 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (prop == "init.svc.adbd") {
         value = "stopped";
+        if (!DEBUG) LOGD("[%s]: %s", name, value);
     } else if (prop == "sys.usb.state") {
         value = "mtp";
+        if (!DEBUG) LOGD("[%s]: %s", name, value);
+    } else if (prop.ends_with("api_level") && !DEVICE_INITIAL_SDK_INT.empty()) {
+        value = DEVICE_INITIAL_SDK_INT.c_str();
+        if (!DEBUG) LOGD("[%s]: %s", name, value);
+    } else if (prop.ends_with(".security_patch") && !SECURITY_PATCH.empty()) {
+        value = SECURITY_PATCH.c_str();
+        if (!DEBUG) LOGD("[%s]: %s", name, value);
+    } else if (prop.ends_with(".build.id") && !BUILD_ID.empty()) {
+        value = BUILD_ID.c_str();
+        if (!DEBUG) LOGD("[%s]: %s", name, value);
     }
 
-    if (props.contains(name)) {
-        value = props[name].c_str();
-        if (verboseLogs > 49) LOGD("[%s]: %s", name, value);
-    } else {
-        for (const auto &item: props) {
-            if (item.first.starts_with("*") && prop.ends_with(item.first.substr(1))) {
-                value = item.second.c_str();
-                if (verboseLogs > 49) LOGD("[%s]: %s", name, value);
-                break;
-            }
-        }
-    }
-
-    if (verboseLogs > 99) LOGD("[%s]: %s", name, value);
+    if (DEBUG) LOGD("[%s]: %s", name, value);
 
     return callbacks[cookie](cookie, name, value, serial);
 }
 
-static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
+static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *) = nullptr;
 
 static void
 my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
-    if (pi == nullptr || callback == nullptr || cookie == nullptr) {
-        return o_system_property_read_callback(pi, callback, cookie);
-    }
-    callbacks[cookie] = callback;
+    if (callback && cookie) callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    auto handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
+    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
     if (!handle) {
-        LOGE("Couldn't find __system_property_read_callback symbol!");
+        LOGE("error resolving __system_property_read_callback symbol!");
         return;
     }
-    if (DobbyHook(handle, (dobby_dummy_func_t) my_system_property_read_callback,
-                  (dobby_dummy_func_t *) &o_system_property_read_callback)) {
-        LOGE("Couldn't hook __system_property_read_callback!");
-        return;
+    if (DobbyHook(handle, (void *) my_system_property_read_callback,
+                  (void **) &o_system_property_read_callback)) {
+        LOGE("hook failed!");
+    } else {
+        LOGD("hook __system_property_read_callback success at %p", handle);
     }
-    LOGD("Hooked __system_property_read_callback at %p", handle);
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -159,17 +131,17 @@ public:
         int dexSize = 0, jsonSize = 0;
         std::vector<uint8_t> jsonVector;
 
-        xread(fd, &dexSize, sizeof(int));
-        xread(fd, &jsonSize, sizeof(int));
+        read(fd, &dexSize, sizeof(int));
+        read(fd, &jsonSize, sizeof(int));
 
         if (dexSize > 0) {
             dexVector.resize(dexSize);
-            xread(fd, dexVector.data(), dexSize * sizeof(uint8_t));
+            read(fd, dexVector.data(), dexSize * sizeof(uint8_t));
         }
 
         if (jsonSize > 0) {
             jsonVector.resize(jsonSize);
-            xread(fd, jsonVector.data(), jsonSize * sizeof(uint8_t));
+            read(fd, jsonVector.data(), jsonSize * sizeof(uint8_t));
             json = nlohmann::json::parse(jsonVector, nullptr, false, true);
         }
 
@@ -177,12 +149,12 @@ public:
 
         LOGD("Dex file size: %d", dexSize);
         LOGD("Json file size: %d", jsonSize);
-
-        parseJSON();
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty()) return;
+
+        parseJSON();
 
         doHook();
 
@@ -202,39 +174,27 @@ private:
     void parseJSON() {
         if (json.empty()) return;
 
-        if (json.contains("verboseLogs") && !json["verboseLogs"].empty()) {
-            if (json["verboseLogs"].is_string()) {
-                verboseLogs = std::stoi(json["verboseLogs"].get<std::string>());
-            } else if (json["verboseLogs"].is_number_integer()) {
-                verboseLogs = json["verboseLogs"].get<int>();
+        if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+            if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
+                DEVICE_INITIAL_SDK_INT = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
+            } else if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {
+                DEVICE_INITIAL_SDK_INT = std::to_string(json["DEVICE_INITIAL_SDK_INT"].get<int>());
             }
-            json.erase("verboseLogs");
+            json.erase("DEVICE_INITIAL_SDK_INT");
         }
 
-        if (verboseLogs > 0) LOGD("Verbose logging (level %d) enabled", verboseLogs);
-
-        std::vector<std::string> removeKeys;
-
-        // Java fields are always uppercase, system props are always lowercase
-        for (const auto &item: json.items()) {
-            if (std::all_of(item.key().cbegin(), item.key().cend(), [](unsigned char c) {
-                return c == '_' || (std::isalpha(c) && std::isupper(c));
-            })) {
-                // Java field
-                if (verboseLogs > 99) LOGD("Skip Java field: %s", item.key().c_str());
-                continue;
-            }
-            // System prop
-            if (item.value().is_string()) {
-                props.insert({item.key(), item.value().get<std::string>()});
-                if (verboseLogs > 99) LOGD("Got system prop: %s", item.key().c_str());
-            }
-            removeKeys.push_back(item.key());
+        if (json.contains("SECURITY_PATCH") && json["SECURITY_PATCH"].is_string()) {
+            SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
         }
 
-        LOGD("Loaded %d props to spoof", props.size());
+        if (json.contains("ID") && json["ID"].is_string()) {
+            BUILD_ID = json["ID"].get<std::string>();
+        }
 
-        for (const auto &item: removeKeys) json.erase(item);
+        if (json.contains("DEBUG") && json["DEBUG"].is_boolean()) {
+            DEBUG = json["DEBUG"].get<bool>();
+            json.erase("DEBUG");
+        }
     }
 
     void injectDex() {
@@ -291,23 +251,30 @@ static std::vector<uint8_t> readFile(const char *path) {
 
 static void companion(int fd) {
 
-    auto dex = readFile(DEX_PATH);
+    std::vector<uint8_t> dex, json;
 
-    auto json = readFile(PIF_JSON);
-    if (json.empty()) json = readFile(PIF_JSON_DEFAULT);
+    if (std::filesystem::exists(DEX_PATH)) {
+        dex = readFile(DEX_PATH);
+    }
+
+    if (std::filesystem::exists(PIF_JSON)) {
+        json = readFile(PIF_JSON);
+    } else if (std::filesystem::exists(PIF_JSON_DEFAULT)) {
+        json = readFile(PIF_JSON_DEFAULT);
+    }
 
     int dexSize = static_cast<int>(dex.size());
     int jsonSize = static_cast<int>(json.size());
 
-    xwrite(fd, &dexSize, sizeof(int));
-    xwrite(fd, &jsonSize, sizeof(int));
+    write(fd, &dexSize, sizeof(int));
+    write(fd, &jsonSize, sizeof(int));
 
     if (dexSize > 0) {
-        xwrite(fd, dex.data(), dexSize * sizeof(uint8_t));
+        write(fd, dex.data(), dexSize * sizeof(uint8_t));
     }
 
     if (jsonSize > 0) {
-        xwrite(fd, json.data(), jsonSize * sizeof(uint8_t));
+        write(fd, json.data(), jsonSize * sizeof(uint8_t));
     }
 }
 
