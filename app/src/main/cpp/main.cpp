@@ -60,11 +60,12 @@ static void (*o_system_property_read_callback)(const prop_info *, T_Callback, vo
 
 static void
 my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
-    if (callback && cookie) callbacks[cookie] = callback;
+    if (pi && callback && cookie) callbacks[cookie] = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
+    LOGD("JSON contains DEVICE_INITIAL_SDK_INT key. Hooking native prop symbol");
     void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
     if (!handle) {
         LOGE("error resolving __system_property_read_callback symbol!");
@@ -154,9 +155,10 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty()) return;
 
-        parseJSON();
+        if (!json.empty()) parseJSON();
 
-        doHook();
+        if (enableHook) doHook();
+        else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
 
         injectDex();
     }
@@ -170,11 +172,11 @@ private:
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     nlohmann::json json;
+    bool enableHook = false;
 
     void parseJSON() {
-        if (json.empty()) return;
-
         if (json.contains("DEVICE_INITIAL_SDK_INT")) {
+            enableHook = true;
             if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
                 DEVICE_INITIAL_SDK_INT = json["DEVICE_INITIAL_SDK_INT"].get<std::string>();
             } else if (json["DEVICE_INITIAL_SDK_INT"].is_number_integer()) {

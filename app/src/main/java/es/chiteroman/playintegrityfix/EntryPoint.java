@@ -49,8 +49,6 @@ public final class EntryPoint {
 
                 jsonObject.keys().forEachRemaining(s -> {
                     try {
-                        if ("DEVICE_INITIAL_SDK_INT".equals(s)) return;
-
                         String value = jsonObject.getString(s);
 
                         if (TextUtils.isEmpty(value)) return;
