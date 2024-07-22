@@ -31,3 +31,5 @@ if [ -f "/data/adb/pif.json" ]; then
     mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"
     ui_print "- Backup custom pif.json"
 fi
+
+rm -rf $MODPATH/system
