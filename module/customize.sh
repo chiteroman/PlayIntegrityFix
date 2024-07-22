@@ -56,6 +56,8 @@ else
             mkdir -p "${MODPATH}${dir}"
             touch "${MODPATH}${dir}/${filename}"
             ui_print "- Removed file: $line"
+        else  # App not found
+            ui_print "! App not found: $line"
         fi
     done
 fi
