@@ -31,31 +31,3 @@ if [ -f "/data/adb/pif.json" ]; then
     mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"
     ui_print "- Backup custom pif.json"
 fi
-
-REMOVE="
-/system/product/app/XiaomiEUInject
-/system/product/app/XiaomiEUInject-Stub
-/system/system/app/EliteDevelopmentModule
-/system/system/app/XInjectModule
-/system/system_ext/app/hentaiLewdbSVTDummy
-/system/system_ext/app/PifPrebuilt
-"
-
-if [ "$KSU" = "true" -o "$APATCH" = "true" ]; then
-    ui_print "- KernelSU/APatch detected, conflicting apps will be automatically removed"
-else
-    ui_print "- Magisk detected, removing conflicting apps one by one :("
-    echo "$REMOVE" | grep -v '^$' | while read -r line; do
-        if [ -d "$line" ]; then
-            mkdir -p "${MODPATH}${line}"
-            touch "${MODPATH}${line}/.replace"
-            ui_print "- Removed dir: $line"
-        elif [ -f "$line" ]; then
-            dir=$(dirname "$line")
-            filename=$(basename "$line")
-            mkdir -p "${MODPATH}${dir}"
-            touch "${MODPATH}${dir}/${filename}"
-            ui_print "- Removed file: $line"
-        fi
-    done
-fi
