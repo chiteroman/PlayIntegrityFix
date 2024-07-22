@@ -1,37 +1,41 @@
-MODPATH="${0%/*}"
-. $MODPATH/common_func.sh
-
 # Remove Play Services from Magisk DenyList when set to Enforce in normal mode
 if magisk --denylist status; then
     magisk --denylist rm com.google.android.gms
 fi
 
+check_reset_prop() {
+  local NAME=$1
+  local EXPECTED=$2
+  local VALUE=$(resetprop $NAME)
+  [ -z $VALUE ] || [ $VALUE = $EXPECTED ] || resetprop $NAME $EXPECTED
+}
+
 # Conditional early sensitive properties
 
 # Samsung
-resetprop_if_diff ro.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.boot.warranty_bit 0
-resetprop_if_diff ro.vendor.warranty_bit 0
-resetprop_if_diff ro.warranty_bit 0
+check_reset_prop ro.boot.warranty_bit 0
+check_reset_prop ro.vendor.boot.warranty_bit 0
+check_reset_prop ro.vendor.warranty_bit 0
+check_reset_prop ro.warranty_bit 0
 
 # Xiaomi
-resetprop_if_diff ro.secureboot.lockstate locked
+check_reset_prop ro.secureboot.lockstate locked
 
 # Realme
-resetprop_if_diff ro.boot.realmebootstate green
+check_reset_prop ro.boot.realmebootstate green
 
 # OnePlus
-resetprop_if_diff ro.is_ever_orange 0
+check_reset_prop ro.is_ever_orange 0
 
 # Microsoft
 for PROP in $(resetprop | grep -oE 'ro.*.build.tags'); do
-    resetprop_if_diff $PROP release-keys
+    check_reset_prop $PROP release-keys
 done
 
 # Other
 for PROP in $(resetprop | grep -oE 'ro.*.build.type'); do
-    resetprop_if_diff $PROP user
+    check_reset_prop $PROP user
 done
-resetprop_if_diff ro.debuggable 0
-resetprop_if_diff ro.force.debuggable 0
-resetprop_if_diff ro.secure 1
+check_reset_prop ro.debuggable 0
+check_reset_prop ro.force.debuggable 0
+check_reset_prop ro.secure 1
