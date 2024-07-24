@@ -17,7 +17,7 @@ contains_reset_prop() {
 # Conditional sensitive properties
 
 # SELinux
-check_reset_prop "ro.boot.selinux" "enforcing"
+check_reset_prop ro.boot.selinux enforcing
 # use delete since it can be 0 or 1 for enforcing depending on OEM
 if [ -n "$(resetprop ro.build.selinux)" ]; then
     resetprop --delete ro.build.selinux
