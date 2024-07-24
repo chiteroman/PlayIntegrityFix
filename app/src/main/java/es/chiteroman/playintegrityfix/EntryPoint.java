@@ -10,6 +10,7 @@ import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
@@ -20,6 +21,7 @@ import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
@@ -75,8 +77,6 @@ public final class EntryPoint {
 
         Security.removeProvider("AndroidKeyStore");
         Security.insertProviderAt(customProvider, 1);
-
-        spoofPackageManager();
     }
 
     private static void spoofPackageManager() {
@@ -139,37 +139,48 @@ public final class EntryPoint {
     }
 
     public static void init(String json) {
+        boolean spoofPackageManager = false;
 
-        if (TextUtils.isEmpty(json)) {
-            Log.e(TAG, "JSON is empty!");
-        } else {
-            try {
-                JSONObject jsonObject = new JSONObject(json);
+        JSONObject jsonObject = null;
 
-                jsonObject.keys().forEachRemaining(s -> {
-                    try {
-                        String value = jsonObject.getString(s);
+        try {
+            jsonObject = new JSONObject(json);
+        } catch (JSONException e) {
+            Log.e(TAG, "Can't parse json", e);
+        }
 
-                        if (TextUtils.isEmpty(value)) return;
+        if (jsonObject == null || jsonObject.length() == 0) return;
 
-                        Field field = getFieldByName(s);
+        Iterator<String> it = jsonObject.keys();
 
-                        if (field == null) return;
+        while (it.hasNext()) {
+            String key = it.next();
 
-                        map.put(field, value);
-
-                    } catch (Throwable t) {
-                        Log.e(TAG, "Error parsing JSON", t);
-                    }
-                });
-            } catch (Throwable t) {
-                Log.e(TAG, "Error parsing JSON", t);
+            if ("SPOOF_PACKAGE_MANAGER".equals(key)) {
+                spoofPackageManager = true;
+                continue;
             }
+
+            String value = "";
+            try {
+                value = jsonObject.getString(key);
+            } catch (JSONException e) {
+                Log.e(TAG, "Couldn't get value from key", e);
+            }
+
+            if (TextUtils.isEmpty(value)) continue;
+
+            Field field = getFieldByName(key);
+
+            if (field == null) continue;
+
+            map.put(field, value);
         }
 
         Log.i(TAG, "Fields ready to spoof: " + map.size());
 
         spoofFields();
+        if (spoofPackageManager) spoofPackageManager();
     }
 
     static void spoofFields() {
