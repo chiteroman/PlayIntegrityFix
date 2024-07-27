@@ -156,11 +156,6 @@ public final class EntryPoint {
         while (it.hasNext()) {
             String key = it.next();
 
-            if ("SPOOF_PACKAGE_MANAGER".equals(key)) {
-                spoofPackageManager = true;
-                continue;
-            }
-
             String value = "";
             try {
                 value = jsonObject.getString(key);
@@ -169,6 +164,11 @@ public final class EntryPoint {
             }
 
             if (TextUtils.isEmpty(value)) continue;
+
+            if ("SPOOF_PACKAGE_MANAGER".equals(key) && Boolean.parseBoolean(value)) {
+                spoofPackageManager = true;
+                continue;
+            }
 
             Field field = getFieldByName(key);
 

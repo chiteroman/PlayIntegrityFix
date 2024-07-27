@@ -17,7 +17,7 @@
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
-static std::string DEVICE_INITIAL_SDK_INT = "21";
+static std::string DEVICE_INITIAL_SDK_INT;
 static std::string SECURITY_PATCH;
 static std::string BUILD_ID;
 

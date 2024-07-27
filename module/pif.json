@@ -1,13 +1,13 @@
 {
-    "ID": "AP31.240517.022",
+    "ID": "AP31.240617.009",
     "BRAND": "google",
     "DEVICE": "husky",
-    "FINGERPRINT": "google/husky_beta/husky:15/AP31.240517.022/11948202:user/release-keys",
+    "FINGERPRINT": "google/husky_beta/husky:15/AP31.240617.009/12094726:user/release-keys",
     "MANUFACTURER": "Google",
     "MODEL": "Pixel 8 Pro",
     "PRODUCT": "husky_beta",
-    "SECURITY_PATCH": "2024-06-05",
+    "SECURITY_PATCH": "2024-07-05",
     "DEVICE_INITIAL_SDK_INT": 21,
-    "SPOOF_PACKAGE_MANAGER": true,
+    "SPOOF_PACKAGE_MANAGER": false,
     "DEBUG": false
 }

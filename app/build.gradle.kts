@@ -25,24 +25,28 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16800
-        versionName = "v16.8"
+        versionCode = 16900
+        versionName = "v16.9"
         multiDexEnabled = false
 
         externalNativeBuild {
             cmake {
                 arguments(
-                    "-DANDROID_STL=none",
-                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
-                    "-DANDROID_CPP_FEATURES=no-rtti no-exceptions",
                     "-DCMAKE_BUILD_TYPE=MinSizeRel",
-                    "-DCMAKE_CXX_STANDARD=23",
-                    "-DCMAKE_C_STANDARD=23",
-                    "-DCMAKE_CXX_STANDARD_REQUIRED=ON",
-                    "-DCMAKE_C_STANDARD_REQUIRED=ON",
-                    "-DCMAKE_VISIBILITY_INLINES_HIDDEN=ON",
-                    "-DCMAKE_CXX_VISIBILITY_PRESET=hidden",
-                    "-DCMAKE_C_VISIBILITY_PRESET=hidden"
+                    "-DANDROID_STL=none",
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+                )
+
+                cFlags(
+                    "-std=c23", "-fvisibility=hidden", "-fvisibility-inlines-hidden"
+                )
+
+                cppFlags(
+                    "-std=c++23",
+                    "-fno-exceptions",
+                    "-fno-rtti",
+                    "-fvisibility=hidden",
+                    "-fvisibility-inlines-hidden"
                 )
             }
         }
