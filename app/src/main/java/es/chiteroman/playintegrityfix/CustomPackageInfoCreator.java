@@ -6,7 +6,7 @@ import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
 
-public class CustomPackageInfoCreator implements Parcelable.Creator<PackageInfo> {
+public final class CustomPackageInfoCreator implements Parcelable.Creator<PackageInfo> {
     private final Parcelable.Creator<PackageInfo> originalCreator;
     private final Signature spoofedSignature;
 
