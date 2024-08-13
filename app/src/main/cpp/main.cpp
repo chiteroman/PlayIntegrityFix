@@ -17,6 +17,32 @@
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
 
+static ssize_t xread(int fd, void *buffer, size_t count) {
+    ssize_t total = 0;
+    char *buf = (char *) buffer;
+    while (count > 0) {
+        ssize_t ret = read(fd, buf, count);
+        if (ret < 0) return -1;
+        buf += ret;
+        total += ret;
+        count -= ret;
+    }
+    return total;
+}
+
+static ssize_t xwrite(int fd, void *buffer, size_t count) {
+    ssize_t total = 0;
+    char *buf = (char *) buffer;
+    while (count > 0) {
+        ssize_t ret = write(fd, buf, count);
+        if (ret < 0) return -1;
+        buf += ret;
+        total += ret;
+        count -= ret;
+    }
+    return total;
+}
+
 static std::string DEVICE_INITIAL_SDK_INT;
 static std::string SECURITY_PATCH;
 static std::string BUILD_ID;
@@ -133,17 +159,17 @@ public:
         int dexSize = 0, jsonSize = 0;
         std::vector<uint8_t> jsonVector;
 
-        read(fd, &dexSize, sizeof(int));
-        read(fd, &jsonSize, sizeof(int));
+        xread(fd, &dexSize, sizeof(int));
+        xread(fd, &jsonSize, sizeof(int));
 
         if (dexSize > 0) {
             dexVector.resize(dexSize);
-            read(fd, dexVector.data(), dexSize * sizeof(uint8_t));
+            xread(fd, dexVector.data(), dexSize * sizeof(uint8_t));
         }
 
         if (jsonSize > 0) {
             jsonVector.resize(jsonSize);
-            read(fd, jsonVector.data(), jsonSize * sizeof(uint8_t));
+            xread(fd, jsonVector.data(), jsonSize * sizeof(uint8_t));
             std::string strJson(jsonVector.cbegin(), jsonVector.cend());
             json = cJSON_ParseWithLength(strJson.c_str(), strJson.size());
         }
@@ -269,15 +295,15 @@ static void companion(int fd) {
     int dexSize = static_cast<int>(dex.size());
     int jsonSize = static_cast<int>(json.size());
 
-    write(fd, &dexSize, sizeof(int));
-    write(fd, &jsonSize, sizeof(int));
+    xwrite(fd, &dexSize, sizeof(int));
+    xwrite(fd, &jsonSize, sizeof(int));
 
     if (dexSize > 0) {
-        write(fd, dex.data(), dexSize * sizeof(uint8_t));
+        xwrite(fd, dex.data(), dexSize * sizeof(uint8_t));
     }
 
     if (jsonSize > 0) {
-        write(fd, json.data(), jsonSize * sizeof(uint8_t));
+        xwrite(fd, json.data(), jsonSize * sizeof(uint8_t));
     }
 }
 
