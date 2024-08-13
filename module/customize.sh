@@ -32,4 +32,4 @@ if [ -f "/data/adb/pif.json" ]; then
     ui_print "- Backup custom pif.json"
 fi
 
-rm -rf $MODPATH/system
+rm -rf "$MODPATH"/system
