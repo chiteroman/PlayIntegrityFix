@@ -208,6 +208,8 @@ private:
         if (!json) return;
 
         const cJSON *api_level = cJSON_GetObjectItemCaseSensitive(json, "DEVICE_INITIAL_SDK_INT");
+        const cJSON *security_patch = cJSON_GetObjectItemCaseSensitive(json, "SECURITY_PATCH");
+        const cJSON *build_id = cJSON_GetObjectItemCaseSensitive(json, "ID");
         const cJSON *isDebug = cJSON_GetObjectItemCaseSensitive(json, "DEBUG");
 
         if (api_level) {
@@ -218,6 +220,14 @@ private:
                 DEVICE_INITIAL_SDK_INT = api_level->valuestring;
             }
             cJSON_DeleteItemFromObjectCaseSensitive(json, "DEVICE_INITIAL_SDK_INT");
+        }
+
+        if (security_patch && cJSON_IsString(security_patch)) {
+            SECURITY_PATCH = security_patch->valuestring;
+        }
+
+        if (build_id && cJSON_IsString(build_id)) {
+            BUILD_ID = build_id->valuestring;
         }
 
         if (isDebug && cJSON_IsBool(isDebug)) {
