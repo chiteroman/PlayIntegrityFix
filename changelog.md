@@ -11,7 +11,6 @@ NOTE: If your ROM is signed with test-keys, modify "SPOOF_PACKAGE_MANAGER" value
 /data/adb/modules/playintegrityfix/pif.json and set to "true".
 Remember to kill com.google.android.gms.unstable process after this!
 
-# v17.0
+# v17.1
 
-- Update to latest husky beta fingerprint
-- Improvements in code
+- Update fingerprint from husky to akita
