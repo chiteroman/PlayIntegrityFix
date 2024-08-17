@@ -20,10 +20,10 @@ if [ -d "/data/adb/modules/MagiskHidePropsConf" ]; then
     ui_print "! WARNING, MagiskHidePropsConf module may cause issues with PIF."
 fi
 
-# tricky_store must be removed when flashing PIF
+# If TrickyStore module is installed, PIF won't spoof Provider
 if [ -d "/data/adb/modules/tricky_store" ]; then
-    touch "/data/adb/modules/tricky_store/remove"
-    ui_print "! tricky_store module removed!"
+    ui_print "- TrickyStore module detected!"
+    ui_print "- PIF will disable Provider spoofing."
 fi
 
 # Check custom fingerprint
