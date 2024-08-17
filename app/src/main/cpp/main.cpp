@@ -267,26 +267,20 @@ private:
 };
 
 static std::vector<uint8_t> readFile(const char *path) {
-
-    std::vector<uint8_t> vector;
-
     FILE *file = fopen(path, "rb");
 
-    if (file) {
-        fseek(file, 0, SEEK_END);
-        long size = ftell(file);
-        fseek(file, 0, SEEK_SET);
+    if (!file) return {};
 
-        vector.resize(size);
-        fread(vector.data(), 1, size, file);
-        fclose(file);
-    } else {
-        LOGD("Couldn't read %s file!", path);
-    }
+    auto size = std::filesystem::file_size(path);
+
+    std::vector<uint8_t> vector(size);
+
+    fread(vector.data(), 1, size, file);
+
+    fclose(file);
 
     return vector;
 }
-
 
 static void companion(int fd) {
 
