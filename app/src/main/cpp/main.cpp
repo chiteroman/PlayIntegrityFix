@@ -2,7 +2,6 @@
 #include <sys/system_properties.h>
 #include <unistd.h>
 #include <vector>
-#include <map>
 #include <filesystem>
 #include "zygisk.hpp"
 #include "dobby.h"
@@ -16,6 +15,8 @@
 #define PIF_JSON "/data/adb/pif.json"
 
 #define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
+
+#define TS_PATH "/data/adb/modules/tricky_store"
 
 static ssize_t xread(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
@@ -51,12 +52,11 @@ static bool DEBUG = false;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
+static volatile T_Callback o_callback = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr ||
-        !callbacks.contains(cookie))
+    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr)
         return;
 
     std::string_view prop(name);
@@ -80,19 +80,18 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (DEBUG) LOGD("[%s]: %s", name, value);
 
-    return callbacks[cookie](cookie, name, value, serial);
+    return o_callback(cookie, name, value, serial);
 }
 
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *) = nullptr;
 
 static void
 my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
-    if (pi && callback && cookie) callbacks[cookie] = callback;
+    if (pi && callback && cookie) o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static void doHook() {
-    LOGD("JSON contains DEVICE_INITIAL_SDK_INT key. Hooking native prop symbol");
     void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
     if (!handle) {
         LOGE("error resolving __system_property_read_callback symbol!");
@@ -174,23 +173,36 @@ public:
             json = cJSON_ParseWithLength(strJson.c_str(), strJson.size());
         }
 
+        bool trickyStore = false;
+        xread(fd, &trickyStore, sizeof(trickyStore));
+
         close(fd);
 
         LOGD("Dex file size: %d", dexSize);
         LOGD("Json file size: %d", jsonSize);
+
+        parseJSON();
+
+        if (trickyStore) {
+            LOGD("TrickyStore module installed and enabled, disabling spoofProps and spoofProvider");
+            spoofProps = false;
+            spoofProvider = false;
+        }
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty()) return;
 
-        parseJSON();
-
-        if (enableHook) doHook();
-        else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-
-        injectDex();
+        UpdateBuildFields();
 
         cJSON_Delete(json);
+
+        if (spoofProps) doHook();
+        else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+
+        if (spoofProvider || spoofSignature) injectDex();
+        else
+            LOGD("Don't inject dex, spoofProvider and spoofSignature are false");
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -202,7 +214,9 @@ private:
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     cJSON *json = nullptr;
-    bool enableHook = false;
+    bool spoofProps = true;
+    bool spoofProvider = true;
+    bool spoofSignature = false;
 
     void parseJSON() {
         if (!json) return;
@@ -211,9 +225,11 @@ private:
         const cJSON *security_patch = cJSON_GetObjectItemCaseSensitive(json, "SECURITY_PATCH");
         const cJSON *build_id = cJSON_GetObjectItemCaseSensitive(json, "ID");
         const cJSON *isDebug = cJSON_GetObjectItemCaseSensitive(json, "DEBUG");
+        const cJSON *spoof_props = cJSON_GetObjectItemCaseSensitive(json, "spoofProps");
+        const cJSON *spoof_provider = cJSON_GetObjectItemCaseSensitive(json, "spoofProvider");
+        const cJSON *spoof_signature = cJSON_GetObjectItemCaseSensitive(json, "spoofSignature");
 
         if (api_level) {
-            enableHook = true;
             if (cJSON_IsNumber(api_level)) {
                 DEVICE_INITIAL_SDK_INT = std::to_string(api_level->valueint);
             } else if (cJSON_IsString(api_level)) {
@@ -233,6 +249,21 @@ private:
         if (isDebug && cJSON_IsBool(isDebug)) {
             DEBUG = cJSON_IsTrue(isDebug);
             cJSON_DeleteItemFromObjectCaseSensitive(json, "DEBUG");
+        }
+
+        if (spoof_props && cJSON_IsBool(spoof_props)) {
+            spoofProps = cJSON_IsTrue(spoof_props);
+            cJSON_DeleteItemFromObjectCaseSensitive(json, "spoofProps");
+        }
+
+        if (spoof_provider && cJSON_IsBool(spoof_provider)) {
+            spoofProvider = cJSON_IsTrue(spoof_provider);
+            cJSON_DeleteItemFromObjectCaseSensitive(json, "spoofProvider");
+        }
+
+        if (spoof_signature && cJSON_IsBool(spoof_signature)) {
+            spoofSignature = cJSON_IsTrue(spoof_signature);
+            cJSON_DeleteItemFromObjectCaseSensitive(json, "spoofSignature");
         }
     }
 
@@ -260,9 +291,71 @@ private:
         auto entryPointClass = (jclass) entryClassObj;
 
         LOGD("call init");
-        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;)V");
-        auto jsonStr = env->NewStringUTF(cJSON_Print(json));
-        env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr);
+        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(ZZ)V");
+        env->CallStaticVoidMethod(entryPointClass, entryInit, spoofProvider, spoofSignature);
+    }
+
+    void UpdateBuildFields() {
+        jclass buildClass = env->FindClass("android/os/Build");
+        jclass versionClass = env->FindClass("android/os/Build$VERSION");
+
+        cJSON *currentElement = nullptr;
+        cJSON_ArrayForEach(currentElement, json) {
+            const char *key = currentElement->string;
+
+            if (cJSON_IsString(currentElement)) {
+                const char *value = currentElement->valuestring;
+                jfieldID fieldID = env->GetStaticFieldID(buildClass, key, "Ljava/lang/String;");
+
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+
+                    fieldID = env->GetStaticFieldID(versionClass, key, "Ljava/lang/String;");
+
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionClear();
+                        continue;
+                    }
+                }
+
+                if (fieldID != nullptr) {
+                    jstring jValue = env->NewStringUTF(value);
+
+                    env->SetStaticObjectField(buildClass, fieldID, jValue);
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionClear();
+                        continue;
+                    }
+
+                    LOGD("Set '%s' to '%s'", key, value);
+                }
+            } else if (cJSON_IsNumber(currentElement)) {
+                int value = currentElement->valueint;
+                jfieldID fieldID = env->GetStaticFieldID(buildClass, key, "I");
+
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+
+                    fieldID = env->GetStaticFieldID(versionClass, key, "I");
+
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionClear();
+                        continue;
+                    }
+                }
+
+                if (fieldID != nullptr) {
+                    env->SetStaticIntField(buildClass, fieldID, value);
+
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionClear();
+                        continue;
+                    }
+
+                    LOGD("Set '%s' to '%d'", key, value);
+                }
+            }
+        }
     }
 };
 
@@ -309,6 +402,10 @@ static void companion(int fd) {
     if (jsonSize > 0) {
         xwrite(fd, json.data(), jsonSize * sizeof(uint8_t));
     }
+
+    bool trickyStore = std::filesystem::exists(TS_PATH) &&
+                       !std::filesystem::exists(std::string(TS_PATH) + "/disable");
+    xwrite(fd, &trickyStore, sizeof(trickyStore));
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

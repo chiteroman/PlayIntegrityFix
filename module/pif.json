@@ -8,6 +8,7 @@
   "PRODUCT": "akita_beta",
   "SECURITY_PATCH": "2024-08-05",
   "DEVICE_INITIAL_SDK_INT": 21,
-  "SPOOF_PACKAGE_MANAGER": false,
-  "DEBUG": false
+  "spoofProps": true,
+  "spoofProvider": true,
+  "spoofSignature": false
 }

@@ -6,12 +6,9 @@ import android.content.pm.Signature;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
 import java.lang.reflect.Field;
@@ -21,7 +18,6 @@ import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
@@ -58,7 +54,7 @@ public final class EntryPoint {
             F7Xt
             """;
 
-    static {
+    private static void spoofProvider() {
         try {
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
             Field keyStoreSpi = keyStore.getClass().getDeclaredField("keyStoreSpi");
@@ -79,7 +75,7 @@ public final class EntryPoint {
         Security.insertProviderAt(customProvider, 1);
     }
 
-    private static void spoofPackageManager() {
+    private static void spoofSignature() {
         Signature spoofedSignature = new Signature(Base64.decode(signatureData, Base64.DEFAULT));
         Parcelable.Creator<PackageInfo> originalCreator = PackageInfo.CREATOR;
         Parcelable.Creator<PackageInfo> customCreator = new CustomPackageInfoCreator(originalCreator, spoofedSignature);
@@ -138,83 +134,17 @@ public final class EntryPoint {
         throw new NoSuchFieldException("Field '" + fieldName + "' not found in class hierarchy of " + Objects.requireNonNull(currentClass).getName());
     }
 
-    public static void init(String json) {
-        boolean spoofPackageManager = false;
-
-        JSONObject jsonObject = null;
-
-        try {
-            jsonObject = new JSONObject(json);
-        } catch (JSONException e) {
-            Log.e(TAG, "Can't parse json", e);
+    public static void init(boolean spoofProvider, boolean spoofSignature) {
+        if (spoofProvider) {
+            spoofProvider();
+        } else {
+            Log.i(TAG, "Don't spoof Provider");
         }
 
-        if (jsonObject == null || jsonObject.length() == 0) return;
-
-        Iterator<String> it = jsonObject.keys();
-
-        while (it.hasNext()) {
-            String key = it.next();
-
-            String value = "";
-            try {
-                value = jsonObject.getString(key);
-            } catch (JSONException e) {
-                Log.e(TAG, "Couldn't get value from key", e);
-            }
-
-            if (TextUtils.isEmpty(value)) continue;
-
-            if ("SPOOF_PACKAGE_MANAGER".equals(key) && Boolean.parseBoolean(value)) {
-                spoofPackageManager = true;
-                continue;
-            }
-
-            Field field = getFieldByName(key);
-
-            if (field == null) continue;
-
-            map.put(field, value);
+        if (spoofSignature) {
+            spoofSignature();
+        } else {
+            Log.i(TAG, "Don't spoof signature");
         }
-
-        Log.i(TAG, "Fields ready to spoof: " + map.size());
-
-        spoofFields();
-        if (spoofPackageManager) spoofPackageManager();
-    }
-
-    static void spoofFields() {
-        map.forEach((field, s) -> {
-            try {
-                if (s.equals(field.get(null))) return;
-                field.setAccessible(true);
-                String oldValue = String.valueOf(field.get(null));
-                field.set(null, s);
-                Log.d(TAG, String.format("""
-                        ---------------------------------------
-                        [%s]
-                        OLD: '%s'
-                        NEW: '%s'
-                        ---------------------------------------
-                        """, field.getName(), oldValue, field.get(null)));
-            } catch (Throwable t) {
-                Log.e(TAG, "Error modifying field", t);
-            }
-        });
-    }
-
-    private static Field getFieldByName(String name) {
-        Field field;
-        try {
-            field = Build.class.getDeclaredField(name);
-        } catch (NoSuchFieldException e) {
-            try {
-                field = Build.VERSION.class.getDeclaredField(name);
-            } catch (NoSuchFieldException ex) {
-                return null;
-            }
-        }
-        field.setAccessible(true);
-        return field;
     }
 }
