@@ -11,6 +11,11 @@ NOTE: If your ROM is signed with test-keys, modify "SPOOF_PACKAGE_MANAGER" value
 /data/adb/modules/playintegrityfix/pif.json and set to "true".
 Remember to kill com.google.android.gms.unstable process after this!
 
-# v17.1
+# v17.2
 
-- Update fingerprint from husky to akita
+- Fix custom ROMs support
+- Spoof android.os.Build fields in Zygisk instead Java
+- Compatibility with TrickyStore module
+- If hook is disabled, unload Zygisk lib
+- Add granular advanced spoofing options (thanks @osm0sis)
+- Other minor improvements
