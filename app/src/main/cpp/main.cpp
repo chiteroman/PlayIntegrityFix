@@ -184,7 +184,8 @@ public:
         parseJSON();
 
         if (trickyStore) {
-            LOGD("TrickyStore module installed and enabled, disabling spoofProps and spoofProvider");
+            LOGD("TrickyStore module installed and enabled, disabling spoofBuild (Java), spoofProps and spoofProvider");
+            spoofBuild = false;
             spoofProps = false;
             spoofProvider = false;
         }
@@ -193,16 +194,18 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty()) return;
 
-        UpdateBuildFields();
-
-        cJSON_Delete(json);
+        if (spoofBuildZygisk) UpdateBuildFields();
 
         if (spoofProps) doHook();
         else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
 
-        if (spoofProvider || spoofSignature) injectDex();
+        if (spoofBuild || spoofProvider || spoofSignature) injectDex();
         else
-            LOGD("Don't inject dex, spoofProvider and spoofSignature are false");
+            LOGD("Don't inject dex: spoofBuild (Java), spoofProvider and spoofSignature are false");
+
+        cJSON_Delete(json);
+        dexVector.clear();
+        dexVector.shrink_to_fit();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *args) override {
@@ -214,6 +217,8 @@ private:
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     cJSON *json = nullptr;
+    bool spoofBuild = true;
+    bool spoofBuildZygisk = true;
     bool spoofProps = true;
     bool spoofProvider = true;
     bool spoofSignature = false;
@@ -225,6 +230,9 @@ private:
         const cJSON *security_patch = cJSON_GetObjectItemCaseSensitive(json, "SECURITY_PATCH");
         const cJSON *build_id = cJSON_GetObjectItemCaseSensitive(json, "ID");
         const cJSON *isDebug = cJSON_GetObjectItemCaseSensitive(json, "DEBUG");
+        const cJSON *spoof_build = cJSON_GetObjectItemCaseSensitive(json, "spoofBuild");
+        const cJSON *spoof_build_zygisk = cJSON_GetObjectItemCaseSensitive(json,
+                                                                           "spoofBuildZygisk");
         const cJSON *spoof_props = cJSON_GetObjectItemCaseSensitive(json, "spoofProps");
         const cJSON *spoof_provider = cJSON_GetObjectItemCaseSensitive(json, "spoofProvider");
         const cJSON *spoof_signature = cJSON_GetObjectItemCaseSensitive(json, "spoofSignature");
@@ -249,6 +257,16 @@ private:
         if (isDebug && cJSON_IsBool(isDebug)) {
             DEBUG = cJSON_IsTrue(isDebug);
             cJSON_DeleteItemFromObjectCaseSensitive(json, "DEBUG");
+        }
+
+        if (spoof_build && cJSON_IsBool(spoof_build)) {
+            spoofBuild = cJSON_IsTrue(spoof_build);
+            cJSON_DeleteItemFromObjectCaseSensitive(json, "spoofBuild");
+        }
+
+        if (spoof_build_zygisk && cJSON_IsBool(spoof_build_zygisk)) {
+            spoofBuildZygisk = cJSON_IsTrue(spoof_build_zygisk);
+            cJSON_DeleteItemFromObjectCaseSensitive(json, "spoofBuildZygisk");
         }
 
         if (spoof_props && cJSON_IsBool(spoof_props)) {
@@ -291,8 +309,15 @@ private:
         auto entryPointClass = (jclass) entryClassObj;
 
         LOGD("call init");
-        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(ZZ)V");
-        env->CallStaticVoidMethod(entryPointClass, entryInit, spoofProvider, spoofSignature);
+        auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;ZZ)V");
+        jstring jsonStr;
+        if (spoofBuild) {
+            jsonStr = env->NewStringUTF(cJSON_Print(json));
+        } else {
+            jsonStr = env->NewStringUTF("");
+        }
+        env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr, spoofProvider,
+                                  spoofSignature);
     }
 
     void UpdateBuildFields() {
@@ -328,31 +353,6 @@ private:
                     }
 
                     LOGD("Set '%s' to '%s'", key, value);
-                }
-            } else if (cJSON_IsNumber(currentElement)) {
-                int value = currentElement->valueint;
-                jfieldID fieldID = env->GetStaticFieldID(buildClass, key, "I");
-
-                if (env->ExceptionCheck()) {
-                    env->ExceptionClear();
-
-                    fieldID = env->GetStaticFieldID(versionClass, key, "I");
-
-                    if (env->ExceptionCheck()) {
-                        env->ExceptionClear();
-                        continue;
-                    }
-                }
-
-                if (fieldID != nullptr) {
-                    env->SetStaticIntField(buildClass, fieldID, value);
-
-                    if (env->ExceptionCheck()) {
-                        env->ExceptionClear();
-                        continue;
-                    }
-
-                    LOGD("Set '%s' to '%d'", key, value);
                 }
             }
         }

@@ -6,9 +6,11 @@ import android.content.pm.Signature;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
+import org.json.JSONObject;
 import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
 import java.lang.reflect.Field;
@@ -134,7 +136,21 @@ public final class EntryPoint {
         throw new NoSuchFieldException("Field '" + fieldName + "' not found in class hierarchy of " + Objects.requireNonNull(currentClass).getName());
     }
 
-    public static void init(boolean spoofProvider, boolean spoofSignature) {
+    private static Field getBuildField(String name) {
+        Field field;
+        try {
+            field = Build.class.getField(name);
+        } catch (NoSuchFieldException e) {
+            try {
+                field = Build.VERSION.class.getField(name);
+            } catch (NoSuchFieldException ex) {
+                return null;
+            }
+        }
+        return field;
+    }
+
+    public static void init(String json, boolean spoofProvider, boolean spoofSignature) {
         if (spoofProvider) {
             spoofProvider();
         } else {
@@ -146,5 +162,49 @@ public final class EntryPoint {
         } else {
             Log.i(TAG, "Don't spoof signature");
         }
+
+        if (TextUtils.isEmpty(json)) {
+            Log.e(TAG, "Json is empty!");
+            return;
+        }
+
+        JSONObject jsonObject;
+        try {
+            jsonObject = new JSONObject(json);
+        } catch (Throwable t) {
+            Log.e(TAG, "init", t);
+            return;
+        }
+
+        jsonObject.keys().forEachRemaining(key -> {
+            Field field = getBuildField(key);
+            if (field == null) return;
+            field.setAccessible(true);
+            String value;
+            try {
+                value = jsonObject.getString(key);
+            } catch (Throwable t) {
+                Log.e(TAG, "init", t);
+                return;
+            }
+            map.putIfAbsent(field, value);
+        });
+
+        Log.i(TAG, "Parsed " + map.size() + " fields from JSON");
+
+        spoofFields();
+    }
+
+    public static void spoofFields() {
+        map.forEach((field, value) -> {
+            try {
+                String oldValue = (String) field.get(null);
+                if (value.equals(oldValue)) return;
+                field.set(null, value);
+                Log.i(TAG, "Set '" + field.getName() + "' to '" + value + "'");
+            } catch (Throwable t) {
+                Log.e(TAG, "spoofFields", t);
+            }
+        });
     }
 }
