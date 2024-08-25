@@ -78,7 +78,6 @@ android {
 
 dependencies {
     implementation(libs.cxx)
-    implementation(libs.bouncycastle)
     implementation(libs.hiddenapibypass)
 }
 

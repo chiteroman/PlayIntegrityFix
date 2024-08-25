@@ -1,12 +1,10 @@
 [versions]
 agp = "8.5.2"
 cxx = "27.0.12077973"
-bouncycastle = "1.78.1"
 hiddenapibypass = "4.3"
 
 [libraries]
 cxx = { group = "org.lsposed.libcxx", name = "libcxx", version.ref = "cxx" }
-bouncycastle = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version.ref = "hiddenapibypass" }
 
 [plugins]
