@@ -65,6 +65,8 @@ public final class EntryPoint {
 
             CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) keyStoreSpi.get(keyStore);
 
+            keyStoreSpi.setAccessible(false);
+
         } catch (Throwable t) {
             Log.e(TAG, "Couldn't get keyStoreSpi field!", t);
         }

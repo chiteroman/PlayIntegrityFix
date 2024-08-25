@@ -61,24 +61,26 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     std::string_view prop(name);
 
+    bool print = false;
+
     if (prop == "init.svc.adbd") {
         value = "stopped";
-        if (!DEBUG) LOGD("[%s]: %s", name, value);
+        print = true;
     } else if (prop == "sys.usb.state") {
         value = "mtp";
-        if (!DEBUG) LOGD("[%s]: %s", name, value);
+        print = true;
     } else if (prop.ends_with("api_level") && !DEVICE_INITIAL_SDK_INT.empty()) {
         value = DEVICE_INITIAL_SDK_INT.c_str();
-        if (!DEBUG) LOGD("[%s]: %s", name, value);
+        print = true;
     } else if (prop.ends_with(".security_patch") && !SECURITY_PATCH.empty()) {
         value = SECURITY_PATCH.c_str();
-        if (!DEBUG) LOGD("[%s]: %s", name, value);
+        print = true;
     } else if (prop.ends_with(".build.id") && !BUILD_ID.empty()) {
         value = BUILD_ID.c_str();
-        if (!DEBUG) LOGD("[%s]: %s", name, value);
+        print = true;
     }
 
-    if (DEBUG) LOGD("[%s]: %s", name, value);
+    if (print || DEBUG) LOGD("[%s]: %s", name, value);
 
     return o_callback(cookie, name, value, serial);
 }
@@ -184,8 +186,7 @@ public:
         parseJSON();
 
         if (trickyStore) {
-            LOGD("TrickyStore module installed and enabled, disabling spoofBuild (Java), spoofProps and spoofProvider");
-            spoofBuild = false;
+            LOGD("TrickyStore module installed and enabled, disabling spoofProps and spoofProvider");
             spoofProps = false;
             spoofProvider = false;
         }
@@ -194,14 +195,14 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty()) return;
 
-        if (spoofBuildZygisk) UpdateBuildFields();
+        UpdateBuildFields();
 
         if (spoofProps) doHook();
         else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
 
-        if (spoofBuild || spoofProvider || spoofSignature) injectDex();
+        if (spoofProvider || spoofSignature) injectDex();
         else
-            LOGD("Don't inject dex: spoofBuild (Java), spoofProvider and spoofSignature are false");
+            LOGD("Dex file won't be injected due spoofProvider and spoofSignature are false");
 
         cJSON_Delete(json);
         dexVector.clear();
@@ -217,8 +218,6 @@ private:
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     cJSON *json = nullptr;
-    bool spoofBuild = true;
-    bool spoofBuildZygisk = true;
     bool spoofProps = true;
     bool spoofProvider = true;
     bool spoofSignature = false;
@@ -230,9 +229,6 @@ private:
         const cJSON *security_patch = cJSON_GetObjectItemCaseSensitive(json, "SECURITY_PATCH");
         const cJSON *build_id = cJSON_GetObjectItemCaseSensitive(json, "ID");
         const cJSON *isDebug = cJSON_GetObjectItemCaseSensitive(json, "DEBUG");
-        const cJSON *spoof_build = cJSON_GetObjectItemCaseSensitive(json, "spoofBuild");
-        const cJSON *spoof_build_zygisk = cJSON_GetObjectItemCaseSensitive(json,
-                                                                           "spoofBuildZygisk");
         const cJSON *spoof_props = cJSON_GetObjectItemCaseSensitive(json, "spoofProps");
         const cJSON *spoof_provider = cJSON_GetObjectItemCaseSensitive(json, "spoofProvider");
         const cJSON *spoof_signature = cJSON_GetObjectItemCaseSensitive(json, "spoofSignature");
@@ -257,16 +253,6 @@ private:
         if (isDebug && cJSON_IsBool(isDebug)) {
             DEBUG = cJSON_IsTrue(isDebug);
             cJSON_DeleteItemFromObjectCaseSensitive(json, "DEBUG");
-        }
-
-        if (spoof_build && cJSON_IsBool(spoof_build)) {
-            spoofBuild = cJSON_IsTrue(spoof_build);
-            cJSON_DeleteItemFromObjectCaseSensitive(json, "spoofBuild");
-        }
-
-        if (spoof_build_zygisk && cJSON_IsBool(spoof_build_zygisk)) {
-            spoofBuildZygisk = cJSON_IsTrue(spoof_build_zygisk);
-            cJSON_DeleteItemFromObjectCaseSensitive(json, "spoofBuildZygisk");
         }
 
         if (spoof_props && cJSON_IsBool(spoof_props)) {
@@ -310,12 +296,7 @@ private:
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;ZZ)V");
-        jstring jsonStr;
-        if (spoofBuild) {
-            jsonStr = env->NewStringUTF(cJSON_Print(json));
-        } else {
-            jsonStr = env->NewStringUTF("");
-        }
+        auto jsonStr = env->NewStringUTF(cJSON_Print(json));
         env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr, spoofProvider,
                                   spoofSignature);
     }
