@@ -7,15 +7,15 @@ If not, try removing /data/adb/pif.json file.
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-NOTE: If your ROM is signed with test-keys, modify "spoofSignature" value in
+If your ROM is signed with test-keys, modify "spoofSignature" value in
 /data/adb/modules/playintegrityfix/pif.json and set to "true".
 Remember to kill com.google.android.gms.unstable process after this!
 
-# v17.2
+If you are using TrickyStore and you have a valid keybox, but Strong
+isn't passing, maybe you should change the ROM.
+Stock ROMs gives the best results.
 
-- Fix custom ROMs support
-- Spoof android.os.Build fields in Zygisk instead Java
-- Compatibility with TrickyStore module
-- If hook is disabled, unload Zygisk lib
-- Add granular advanced spoofing options (thanks @osm0sis)
-- Other minor improvements
+# v17.3
+
+- Fix SELinux prop spoofing
+- Remove useless code
