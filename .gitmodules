@@ -1,6 +1,0 @@
-[submodule "app/src/main/cpp/Dobby"]
-	path = app/src/main/cpp/Dobby
-	url = https://github.com/chiteroman/Dobby.git
-[submodule "app/src/main/cpp/cJSON"]
-	path = app/src/main/cpp/cJSON
-	url = https://github.com/DaveGamble/cJSON.git
