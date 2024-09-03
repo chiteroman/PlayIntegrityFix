@@ -4,12 +4,34 @@ project("playintegrityfix")
 
 find_package(cxx REQUIRED CONFIG)
 
-link_libraries(cxx::cxx)
+if (${ANDROID_ABI} STREQUAL "arm64-v8a")
+    set(ARCH "arm64")
+elseif (${ANDROID_ABI} STREQUAL "armeabi-v7a")
+    set(ARCH "arm")
+endif ()
 
-add_library(${CMAKE_PROJECT_NAME} SHARED main.cpp cJSON/cJSON.c)
+file(GLOB SHADOWHOOK_SRC
+        shadowhook/*.c
+        shadowhook/arch/${ARCH}/*.c
+        shadowhook/common/*.c
+        shadowhook/third_party/xdl/*.c
+)
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE cJSON)
+add_library(${CMAKE_PROJECT_NAME} SHARED
+        main.cpp
+        cJSON/cJSON.c
+        ${SHADOWHOOK_SRC}
+)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE log dobby_static)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        cJSON
+        shadowhook/shadowhook/src/main/cpp
+        shadowhook/arch/${ARCH}
+        shadowhook/include
+        shadowhook/common
+        shadowhook/third_party/bsd
+        shadowhook/third_party/lss
+        shadowhook/third_party/xdl
+)
 
-add_subdirectory(Dobby)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE log cxx::cxx)
