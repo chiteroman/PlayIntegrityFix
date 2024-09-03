@@ -31,6 +31,11 @@ android {
 
         externalNativeBuild {
             cmake {
+                abiFilters(
+                    "arm64-v8a",
+                    "armeabi-v7a"
+                )
+
                 arguments(
                     "-DCMAKE_BUILD_TYPE=MinSizeRel",
                     "-DANDROID_STL=none",
@@ -38,7 +43,9 @@ android {
                 )
 
                 cFlags(
-                    "-std=c23", "-fvisibility=hidden", "-fvisibility-inlines-hidden"
+                    "-std=c23",
+                    "-fvisibility=hidden",
+                    "-fvisibility-inlines-hidden"
                 )
 
                 cppFlags(
