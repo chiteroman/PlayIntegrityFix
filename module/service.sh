@@ -23,7 +23,9 @@ resetprop_if_match vendor.boot.mode recovery unknown
 
 # Hiding SELinux | Permissive status
 resetprop_if_diff ro.boot.selinux enforcing
-resetprop_if_diff ro.build.selinux 1
+if [ -n "$(resetprop ro.build.selinux)" ]; then
+    resetprop --delete ro.build.selinux
+fi
 
 # Hiding SELinux | Use toybox to protect *stat* access time reading
 if [[ "$(toybox cat /sys/fs/selinux/enforce)" == "0" ]]; then
