@@ -1,6 +1,11 @@
+# Module requires Zygisk to work
+if [ "$ZYGISK_ENABLED" != "1" ] && [ ! -d "/data/adb/modules/zygisksu" ]; then
+    abort "! Zygisk is not enabled. Please, enable Zygisk in Magisk Settings or install the ZygiskNext or ReZygisk module."
+fi
+
 # Error on < Android 8
 if [ "$API" -lt 26 ]; then
-    abort "- !!! You can't use this module on Android < 8.0"
+    abort "! You can't use this module on Android < 8.0"
 fi
 
 # safetynet-fix module is obsolete and it's incompatible with PIF
@@ -20,16 +25,8 @@ if [ -d "/data/adb/modules/MagiskHidePropsConf" ]; then
     ui_print "! WARNING, MagiskHidePropsConf module may cause issues with PIF."
 fi
 
-# If TrickyStore module is installed, PIF won't spoof Provider
-if [ -d "/data/adb/modules/tricky_store" ]; then
-    ui_print "- TrickyStore module detected!"
-    ui_print "- PIF will disable Provider spoofing."
-fi
-
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
     mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"
     ui_print "- Backup custom pif.json"
 fi
-
-rm -rf "$MODPATH"/system

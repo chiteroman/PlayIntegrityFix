@@ -1,58 +1,50 @@
-# Sensitive properties
+MODPATH="${0%/*}"
+. $MODPATH/common_func.sh
 
-resetprop_if_diff() {
-    local NAME="$1"
-    local EXPECTED="$2"
-    local CURRENT="$(resetprop "$NAME")"
-    
-    [ -z "$CURRENT" ] || [ "$CURRENT" = "$EXPECTED" ] || resetprop -n "$NAME" "$EXPECTED"
-}
+if [ -d "/data/adb/modules/tricky_store" ]; then
+    mv /data/adb/tricky_store/keybox.xml /data/adb/tricky_store/keybox.xml.orig
+    cp "$MODPATH"/keybox.xml /data/adb/tricky_store/keybox.xml
+fi
 
-resetprop_if_match() {
-    local NAME="$1"
-    local CONTAINS="$2"
-    local VALUE="$3"
-    
-    [[ "$(resetprop "$NAME")" = *"$CONTAINS"* ]] && resetprop -n "$NAME" "$VALUE"
-}
+# Conditional sensitive properties
 
-# Magisk recovery mode
-resetprop_if_match ro.bootmode recovery unknown
+# Magisk Recovery Mode
 resetprop_if_match ro.boot.mode recovery unknown
+resetprop_if_match ro.bootmode recovery unknown
 resetprop_if_match vendor.boot.mode recovery unknown
 
-# Hiding SELinux | Permissive status
+# SELinux
 resetprop_if_diff ro.boot.selinux enforcing
+# use delete since it can be 0 or 1 for enforcing depending on OEM
 if [ -n "$(resetprop ro.build.selinux)" ]; then
     resetprop --delete ro.build.selinux
 fi
-
-# Hiding SELinux | Use toybox to protect *stat* access time reading
-if [[ "$(toybox cat /sys/fs/selinux/enforce)" == "0" ]]; then
+# use toybox to protect stat access time reading
+if [ "$(toybox cat /sys/fs/selinux/enforce)" = "0" ]; then
     chmod 640 /sys/fs/selinux/enforce
     chmod 440 /sys/fs/selinux/policy
 fi
 
-# Late props which must be set after boot_completed
-{
-    until [[ "$(getprop sys.boot_completed)" == "1" ]]; do
-        sleep 1
-    done
-    
-    # SafetyNet/Play Integrity | Avoid breaking Realme fingerprint scanners
-    resetprop_if_diff ro.boot.flash.locked 1
-    
-    # SafetyNet/Play Integrity | Avoid breaking Oppo fingerprint scanners
-    resetprop_if_diff ro.boot.vbmeta.device_state locked
-    
-    # SafetyNet/Play Integrity | Avoid breaking OnePlus display modes/fingerprint scanners
-    resetprop_if_diff vendor.boot.verifiedbootstate green
-    
-    # SafetyNet/Play Integrity | Avoid breaking OnePlus display modes/fingerprint scanners on OOS 12
-    resetprop_if_diff ro.boot.verifiedbootstate green
-    resetprop_if_diff ro.boot.veritymode enforcing
-    resetprop_if_diff vendor.boot.vbmeta.device_state locked
+# Conditional late sensitive properties
 
-    # Custom ROMs support
-    resetprop_if_diff persist.sys.pixelprops.pi false
-}&
+until [ "$(getprop sys.boot_completed)" = "1" ]; do
+    sleep 1
+done
+
+# SafetyNet/Play Integrity + OEM
+# avoid bootloop on some Xiaomi devices
+resetprop_if_diff ro.secureboot.lockstate locked
+# avoid breaking Realme fingerprint scanners
+resetprop_if_diff ro.boot.flash.locked 1
+resetprop_if_diff ro.boot.realme.lockstate 1
+# avoid breaking Oppo fingerprint scanners
+resetprop_if_diff ro.boot.vbmeta.device_state locked
+# avoid breaking OnePlus display modes/fingerprint scanners
+resetprop_if_diff vendor.boot.verifiedbootstate green
+# avoid breaking OnePlus/Oppo fingerprint scanners on OOS/ColorOS 12+
+resetprop_if_diff ro.boot.verifiedbootstate green
+resetprop_if_diff ro.boot.veritymode enforcing
+resetprop_if_diff vendor.boot.vbmeta.device_state locked
+
+# Other
+resetprop_if_diff sys.oem_unlock_allowed 0

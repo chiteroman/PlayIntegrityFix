@@ -1,10 +1,11 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <string>
 #include <vector>
-#include <filesystem>
 #include "zygisk.hpp"
-#include "dobby.h"
+#include "shadowhook.h"
 #include "cJSON.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
@@ -18,30 +19,35 @@
 
 #define TS_PATH "/data/adb/modules/tricky_store"
 
-static ssize_t xread(int fd, void *buffer, size_t count) {
-    ssize_t total = 0;
-    char *buf = (char *) buffer;
-    while (count > 0) {
-        ssize_t ret = read(fd, buf, count);
-        if (ret < 0) return -1;
-        buf += ret;
-        total += ret;
-        count -= ret;
+static size_t xread(int fd, uint8_t *data, size_t size) {
+    size_t remaining = size;
+    while (remaining > 0) {
+        ssize_t n = TEMP_FAILURE_RETRY(read(fd, data, remaining));
+        if (n <= 0) {
+            return size - remaining;
+        }
+        data += n;
+        remaining -= n;
     }
-    return total;
+    return size;
 }
 
-static ssize_t xwrite(int fd, void *buffer, size_t count) {
-    ssize_t total = 0;
-    char *buf = (char *) buffer;
-    while (count > 0) {
-        ssize_t ret = write(fd, buf, count);
-        if (ret < 0) return -1;
-        buf += ret;
-        total += ret;
-        count -= ret;
+static size_t xwrite(int fd, uint8_t *data, size_t size) {
+    size_t remaining = size;
+    while (remaining > 0) {
+        ssize_t n = TEMP_FAILURE_RETRY(write(fd, data, remaining));
+        if (n < 0) {
+            LOGE("write failed: %s", strerror(errno));
+            return size - remaining;
+        }
+        data += n;
+        remaining -= n;
     }
-    return total;
+    if (TEMP_FAILURE_RETRY(fsync(fd)) == -1) {
+        LOGE("fsync failed: %s", strerror(errno));
+        return -1;
+    }
+    return size;
 }
 
 static std::string DEVICE_INITIAL_SDK_INT;
@@ -93,18 +99,28 @@ my_system_property_read_callback(const prop_info *pi, T_Callback callback, void 
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
-static void doHook() {
-    void *handle = DobbySymbolResolver(nullptr, "__system_property_read_callback");
-    if (!handle) {
-        LOGE("error resolving __system_property_read_callback symbol!");
-        return;
+static bool doHook() {
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
+    {
+        auto libc_handle = shadowhook_dlopen("libc.so");
+        if (!libc_handle) {
+            LOGE("error loading libc.so library!");
+            goto exit;
+        }
+        auto handle = shadowhook_dlsym(libc_handle, "__system_property_read_callback");
+        if (!handle) {
+            LOGE("error resolving __system_property_read_callback symbol!");
+            goto exit;
+        }
+        if (shadowhook_hook_sym_addr(handle, (void *) my_system_property_read_callback,
+                                     (void **) &o_system_property_read_callback)) {
+            LOGD("hook __system_property_read_callback success at %p", handle);
+            return true;
+        }
     }
-    if (DobbyHook(handle, (void *) my_system_property_read_callback,
-                  (void **) &o_system_property_read_callback)) {
-        LOGE("hook __system_property_read_callback failed!");
-        return;
-    }
-    LOGD("hook __system_property_read_callback success at %p", handle);
+    exit:
+    LOGE("hook __system_property_read_callback failed!");
+    return false;
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
@@ -160,8 +176,8 @@ public:
         int dexSize = 0, jsonSize = 0;
         std::vector<uint8_t> jsonVector;
 
-        xread(fd, &dexSize, sizeof(int));
-        xread(fd, &jsonSize, sizeof(int));
+        xread(fd, (uint8_t *) &dexSize, sizeof(int));
+        xread(fd, (uint8_t *) &jsonSize, sizeof(int));
 
         if (dexSize > 0) {
             dexVector.resize(dexSize);
@@ -176,7 +192,7 @@ public:
         }
 
         bool trickyStore = false;
-        xread(fd, &trickyStore, sizeof(trickyStore));
+        xread(fd, (uint8_t *) &trickyStore, sizeof(trickyStore));
 
         close(fd);
 
@@ -186,7 +202,7 @@ public:
         parseJSON();
 
         if (trickyStore) {
-            LOGD("TrickyStore module installed and enabled, disabling spoofProps and spoofProvider");
+            LOGD("TrickyStore module installed, disabling spoofProps and spoofProvider");
             spoofProps = false;
             spoofProvider = false;
         }
@@ -197,8 +213,9 @@ public:
 
         UpdateBuildFields();
 
-        if (spoofProps) doHook();
-        else api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        if (spoofProps)
+            if (!doHook())
+                api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
 
         if (spoofProvider || spoofSignature) injectDex();
         else
@@ -218,8 +235,8 @@ private:
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     cJSON *json = nullptr;
-    bool spoofProps = true;
-    bool spoofProvider = true;
+    bool spoofProps = false;
+    bool spoofProvider = false;
     bool spoofSignature = false;
 
     void parseJSON() {
@@ -305,7 +322,7 @@ private:
         jclass buildClass = env->FindClass("android/os/Build");
         jclass versionClass = env->FindClass("android/os/Build$VERSION");
 
-        cJSON *currentElement = nullptr;
+        cJSON *currentElement;
         cJSON_ArrayForEach(currentElement, json) {
             const char *key = currentElement->string;
 
@@ -345,7 +362,9 @@ static std::vector<uint8_t> readFile(const char *path) {
 
     if (!file) return {};
 
-    auto size = std::filesystem::file_size(path);
+    fseek(file, 0, SEEK_END);
+    auto size = ftell(file);
+    fseek(file, 0, SEEK_SET);
 
     std::vector<uint8_t> vector(size);
 
@@ -360,21 +379,16 @@ static void companion(int fd) {
 
     std::vector<uint8_t> dex, json;
 
-    if (std::filesystem::exists(DEX_PATH)) {
-        dex = readFile(DEX_PATH);
-    }
+    dex = readFile(DEX_PATH);
 
-    if (std::filesystem::exists(PIF_JSON)) {
-        json = readFile(PIF_JSON);
-    } else if (std::filesystem::exists(PIF_JSON_DEFAULT)) {
-        json = readFile(PIF_JSON_DEFAULT);
-    }
+    json = readFile(PIF_JSON);
+    if (json.empty()) json = readFile(PIF_JSON_DEFAULT);
 
     int dexSize = static_cast<int>(dex.size());
     int jsonSize = static_cast<int>(json.size());
 
-    xwrite(fd, &dexSize, sizeof(int));
-    xwrite(fd, &jsonSize, sizeof(int));
+    xwrite(fd, (uint8_t *) &dexSize, sizeof(int));
+    xwrite(fd, (uint8_t *) &jsonSize, sizeof(int));
 
     if (dexSize > 0) {
         xwrite(fd, dex.data(), dexSize * sizeof(uint8_t));
@@ -384,9 +398,16 @@ static void companion(int fd) {
         xwrite(fd, json.data(), jsonSize * sizeof(uint8_t));
     }
 
-    bool trickyStore = std::filesystem::exists(TS_PATH) &&
-                       !std::filesystem::exists(std::string(TS_PATH) + "/disable");
-    xwrite(fd, &trickyStore, sizeof(trickyStore));
+    bool trickyStore = false;
+
+    DIR *dir = opendir(TS_PATH);
+
+    if (dir) {
+        trickyStore = true;
+        closedir(dir);
+    }
+
+    xwrite(fd, (uint8_t *) &trickyStore, sizeof(trickyStore));
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

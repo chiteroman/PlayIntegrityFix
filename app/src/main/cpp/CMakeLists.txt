@@ -25,7 +25,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         cJSON
-        shadowhook/shadowhook/src/main/cpp
+        shadowhook/.
         shadowhook/arch/${ARCH}
         shadowhook/include
         shadowhook/common

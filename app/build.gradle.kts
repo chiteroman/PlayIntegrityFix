@@ -16,9 +16,6 @@ android {
         resources {
             excludes += "**"
         }
-        jniLibs {
-            excludes += "**/libdobby.so"
-        }
     }
 
     defaultConfig {
@@ -26,7 +23,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 17300
-        versionName = "v17.3"
+        versionName = "v17.4-TEST"
         multiDexEnabled = false
 
         externalNativeBuild {
@@ -43,13 +40,13 @@ android {
                 )
 
                 cFlags(
-                    "-std=c23",
+                    "-std=gnu23",
                     "-fvisibility=hidden",
                     "-fvisibility-inlines-hidden"
                 )
 
                 cppFlags(
-                    "-std=c++23",
+                    "-std=gnu++26",
                     "-fno-exceptions",
                     "-fno-rtti",
                     "-fvisibility=hidden",

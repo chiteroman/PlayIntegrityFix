@@ -1,6 +1,6 @@
 id=playintegrityfix
 name=Play Integrity Fix
-version=v17.3
+version=v17.4-TEST
 versionCode=17300
 author=chiteroman
 description=Universal modular fix for Play Integrity (and SafetyNet) on devices running Android 8-15
