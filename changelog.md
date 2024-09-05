@@ -15,7 +15,8 @@ If you are using TrickyStore and you have a valid keybox, but Strong
 isn't passing, maybe you should change the ROM.
 Stock ROMs gives the best results.
 
-# v17.3
+# v17.4
 
-- Fix SELinux prop spoofing
-- Remove useless code
+- Update fingerprint
+- Use Shadowhook instead Dobby
+- Improvements in code
