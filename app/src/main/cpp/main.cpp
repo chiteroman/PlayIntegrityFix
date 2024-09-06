@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include "zygisk.hpp"
-#include "shadowhook.h"
+#include "bytehook.h"
 #include "cJSON.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
@@ -91,36 +91,28 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
     return o_callback(cookie, name, value, serial);
 }
 
-static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *) = nullptr;
-
 static void
 my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
     if (pi && callback && cookie) o_callback = callback;
-    return o_system_property_read_callback(pi, modify_callback, cookie);
+
+    return BYTEHOOK_CALL_PREV(my_system_property_read_callback, pi, modify_callback, cookie);
 }
 
 static bool doHook() {
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
-    {
-        auto libc_handle = shadowhook_dlopen("libc.so");
-        if (!libc_handle) {
-            LOGE("error loading libc.so library!");
-            goto exit;
-        }
-        auto handle = shadowhook_dlsym(libc_handle, "__system_property_read_callback");
-        if (!handle) {
-            LOGE("error resolving __system_property_read_callback symbol!");
-            goto exit;
-        }
-        if (shadowhook_hook_sym_addr(handle, (void *) my_system_property_read_callback,
-                                     (void **) &o_system_property_read_callback)) {
-            LOGD("hook __system_property_read_callback success at %p", handle);
-            return true;
-        }
+    int init = bytehook_init(BYTEHOOK_MODE_AUTOMATIC, true);
+    if (init != BYTEHOOK_STATUS_CODE_OK) {
+        LOGE("Failed to initialize bytehook: %d", init);
+        return false;
     }
-    exit:
-    LOGE("hook __system_property_read_callback failed!");
-    return false;
+
+    void *handle = bytehook_hook_all(nullptr, "__system_property_read_callback", (void *) my_system_property_read_callback, nullptr, nullptr);
+    if (handle == nullptr) {
+        LOGE("Failed to hook __system_property_read_callback.");
+        return false;
+    }
+
+    LOGD("Hooked __system_property_read_callback.");
+    return true;
 }
 
 class PlayIntegrityFix : public zygisk::ModuleBase {

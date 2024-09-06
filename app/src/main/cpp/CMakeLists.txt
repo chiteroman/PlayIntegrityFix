@@ -10,28 +10,22 @@ elseif (${ANDROID_ABI} STREQUAL "armeabi-v7a")
     set(ARCH "arm")
 endif ()
 
-file(GLOB SHADOWHOOK_SRC
-        shadowhook/*.c
-        shadowhook/arch/${ARCH}/*.c
-        shadowhook/common/*.c
-        shadowhook/third_party/xdl/*.c
+file(GLOB BYTEHOOK_SRC
+        bytehook/*.c
 )
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
         main.cpp
         cJSON/cJSON.c
-        ${SHADOWHOOK_SRC}
+        ${BYTEHOOK_SRC}
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         cJSON
-        shadowhook/.
-        shadowhook/arch/${ARCH}
-        shadowhook/include
-        shadowhook/common
-        shadowhook/third_party/bsd
-        shadowhook/third_party/lss
-        shadowhook/third_party/xdl
+        bytehook/.
+        bytehook/include
+        bytehook/third_party/bsd
+        bytehook/third_party/lss
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE log cxx::cxx)

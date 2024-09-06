@@ -1,0 +1,26 @@
+{
+    global:
+        JNI_OnLoad;
+        bytehook_get_version;
+        bytehook_init;
+        bytehook_hook_single;
+        bytehook_hook_all;
+        bytehook_hook_partial;
+        bytehook_unhook;
+        bytehook_add_ignore;
+        bytehook_get_debug;
+        bytehook_set_debug;
+        bytehook_get_recordable;
+        bytehook_set_recordable;
+        bytehook_get_records;
+        bytehook_dump_records;
+        bytehook_get_prev_func;
+        bytehook_pop_stack;
+        bytehook_get_return_address;
+        bytehook_get_mode;
+        bytehook_add_dlopen_callback;
+        bytehook_del_dlopen_callback;
+
+    local:
+        *;
+};
