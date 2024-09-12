@@ -1,5 +1,5 @@
 RESETPROP="resetprop -n"
-[ -n "$MAGISK_VER_CODE" ] && [ "$MAGISK_VER_CODE" -lt "27003" ] && RESETPROP=resetprop_hexpatch
+[ -f /data/adb/magisk/util_functions.sh ] && [ "$(grep MAGISK_VER_CODE /data/adb/magisk/util_functions.sh | cut -d= -f2)" -lt 27003 ] && RESETPROP=resetprop_hexpatch
 
 # resetprop_hexpatch [-f|--force] <prop name> <new value>
 resetprop_hexpatch() {
