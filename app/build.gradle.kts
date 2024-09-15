@@ -22,8 +22,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17400
-        versionName = "v17.4"
+        versionCode = 17500
+        versionName = "v17.5"
         multiDexEnabled = false
 
         externalNativeBuild {
@@ -42,8 +42,7 @@ android {
                 cFlags(
                     "-std=gnu23",
                     "-fvisibility=hidden",
-                    "-fvisibility-inlines-hidden",
-                    "-ftrivial-auto-var-init=zero"
+                    "-fvisibility-inlines-hidden"
                 )
 
                 cppFlags(
@@ -51,8 +50,7 @@ android {
                     "-fno-exceptions",
                     "-fno-rtti",
                     "-fvisibility=hidden",
-                    "-fvisibility-inlines-hidden",
-                    "-ftrivial-auto-var-init=zero"
+                    "-fvisibility-inlines-hidden"
                 )
             }
         }

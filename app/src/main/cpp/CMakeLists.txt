@@ -4,6 +4,8 @@ project("playintegrityfix")
 
 find_package(cxx REQUIRED CONFIG)
 
+link_libraries(cxx::cxx)
+
 if (${ANDROID_ABI} STREQUAL "arm64-v8a")
     set(ARCH "arm64")
 elseif (${ANDROID_ABI} STREQUAL "armeabi-v7a")
@@ -19,12 +21,10 @@ file(GLOB SHADOWHOOK_SRC
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
         main.cpp
-        cJSON/cJSON.c
         ${SHADOWHOOK_SRC}
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        cJSON
         shadowhook/.
         shadowhook/arch/${ARCH}
         shadowhook/include
@@ -34,4 +34,4 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         shadowhook/third_party/xdl
 )
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE log cxx::cxx)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE log)
