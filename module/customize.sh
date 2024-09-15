@@ -1,6 +1,7 @@
 # Module requires Zygisk to work
-if [ "$ZYGISK_ENABLED" != "1" ] && [ ! -d "/data/adb/modules/zygisksu" ]; then
-    abort "! Zygisk is not enabled. Please, enable Zygisk in Magisk Settings or install the ZygiskNext or ReZygisk module."
+isZygiskEnabled=$(magisk --sqlite "SELECT value FROM settings WHERE key='zygisk';")
+if [ "$isZygiskEnabled" == "value=0" ] && [ ! -d "/data/adb/modules/zygisksu" ]; then
+    abort "! Zygisk is not enabled. Please, enable Zygisk in Magisk settings or install ZygiskNext or ReZygisk module."
 fi
 
 # Error on < Android 8
