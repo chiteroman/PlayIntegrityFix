@@ -202,12 +202,10 @@ public:
 
         if (spoofProps) {
             if (!doHook()) {
-                LOGD("dlclose zygisk lib");
-                api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+                dlclose();
             }
         } else {
-            LOGD("dlclose zygisk lib");
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            dlclose();
         }
 
         json.clear();
@@ -227,6 +225,11 @@ private:
     bool spoofProps = false;
     bool spoofProvider = false;
     bool spoofSignature = false;
+
+    void dlclose() {
+        LOGD("dlclose zygisk lib");
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+    }
 
     void parseJSON() {
         if (json.empty()) return;
@@ -274,6 +277,12 @@ private:
                                                            "()Ljava/lang/ClassLoader;");
         auto systemClassLoader = env->CallStaticObjectMethod(clClass, getSystemClassLoader);
 
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+            return;
+        }
+
         LOGD("create class loader");
         auto dexClClass = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         auto dexClInit = env->GetMethodID(dexClClass, "<init>",
@@ -282,19 +291,45 @@ private:
                                                static_cast<jlong>(dexVector.size()));
         auto dexCl = env->NewObject(dexClClass, dexClInit, buffer, systemClassLoader);
 
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+            return;
+        }
+
         LOGD("load class");
         auto loadClass = env->GetMethodID(clClass, "loadClass",
                                           "(Ljava/lang/String;)Ljava/lang/Class;");
         auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
         auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
-
         auto entryPointClass = (jclass) entryClassObj;
+
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+            return;
+        }
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;ZZ)V");
         auto jsonStr = env->NewStringUTF(json.dump().c_str());
         env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr, spoofProvider,
                                   spoofSignature);
+
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+        }
+
+        env->DeleteLocalRef(entryClassName);
+        env->DeleteLocalRef(entryClassObj);
+        env->DeleteLocalRef(jsonStr);
+        env->DeleteLocalRef(dexCl);
+        env->DeleteLocalRef(buffer);
+        env->DeleteLocalRef(dexClClass);
+        env->DeleteLocalRef(clClass);
+
+        LOGD("jni memory free");
     }
 
     void UpdateBuildFields() {
