@@ -47,12 +47,14 @@ static std::string DEVICE_INITIAL_SDK_INT, SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static volatile T_Callback o_callback = nullptr;
+static T_Callback o_callback = nullptr;
+static void *o_cookie = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (cookie == nullptr || name == nullptr || value == nullptr || o_callback == nullptr)
-        return;
+    if (!cookie || !name || !value || !o_callback || !o_cookie) return;
+
+    if (cookie != o_cookie) return;
 
     std::string_view prop(name);
 
@@ -68,26 +70,30 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         if (!BUILD_ID.empty()) {
             value = BUILD_ID.c_str();
         }
-    } else {
-        if (DEBUG) LOGD("[%s]: '%s'", name, value);
-        return o_callback(cookie, name, value, serial);
     }
 
-    LOGD("[%s]: '%s'", name, value);
+    if (DEBUG) LOGD("[%s]: '%s'", name, value);
 
     return o_callback(cookie, name, value, serial);
 }
 
-static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *) = nullptr;
+static void (*o_system_property_read_callback)(prop_info *, T_Callback, void *) = nullptr;
 
-static void
-my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
-    if (pi && callback && cookie) o_callback = callback;
+static void my_system_property_read_callback(prop_info *pi, T_Callback callback, void *cookie) {
+    if (pi && callback && cookie) {
+        o_callback = callback;
+        o_cookie = cookie;
+    }
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static bool doHook() {
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
+    if (shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true) != 0) {
+        LOGE("shadowhook failed to init!");
+        return false;
+    }
+
+    LOGD("loaded shadowhook version: %s", SHADOWHOOK_VERSION);
 
     void *ptr = shadowhook_hook_sym_name(
             "libc.so",

@@ -6,7 +6,7 @@ android {
     namespace = "es.chiteroman.playintegrityfix"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "27.1.12297006"
 
     buildFeatures {
         prefab = true
@@ -22,8 +22,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17500
-        versionName = "v17.5"
+        versionCode = 17600
+        versionName = "v17.6"
         multiDexEnabled = false
 
         externalNativeBuild {
@@ -34,7 +34,8 @@ android {
                 )
 
                 arguments(
-                    "-DCMAKE_BUILD_TYPE=MinSizeRel",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON",
                     "-DANDROID_STL=none",
                     "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
                 )
@@ -75,7 +76,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            version = "3.30.3"
         }
     }
 }

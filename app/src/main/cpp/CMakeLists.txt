@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 3.30.3)
 
 project("playintegrityfix")
 
@@ -25,7 +25,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        shadowhook/.
+        shadowhook
         shadowhook/arch/${ARCH}
         shadowhook/include
         shadowhook/common
