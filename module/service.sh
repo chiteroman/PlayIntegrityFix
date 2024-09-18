@@ -1,11 +1,6 @@
 MODPATH="${0%/*}"
 . $MODPATH/common_func.sh
 
-if [ -d "/data/adb/modules/tricky_store" ]; then
-    mv /data/adb/tricky_store/keybox.xml /data/adb/tricky_store/keybox.xml.orig
-    cp "$MODPATH"/keybox.xml /data/adb/tricky_store/keybox.xml
-fi
-
 # Conditional sensitive properties
 
 # Magisk Recovery Mode
