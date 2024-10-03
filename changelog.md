@@ -15,10 +15,7 @@ If you are using TrickyStore and you have a valid keybox, but Strong
 isn't passing, maybe you should change the ROM.
 Stock ROMs gives the best results.
 
-# v17.6
+# v17.7
 
-- Remove keybox logic
-- Update AGP, NDK & CMake
-- Change build from MinSizeRel to Release (better performance)
-- Enable LTO
-- Refactor code
+- Update Gradle and AGP
+- Update fingerprint (fix RCS)
