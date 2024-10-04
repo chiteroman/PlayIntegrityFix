@@ -5,7 +5,6 @@ plugins {
 android {
     namespace = "es.chiteroman.playintegrityfix"
     compileSdk = 35
-    buildToolsVersion = "35.0.0"
     ndkVersion = "27.1.12297006"
 
     buildFeatures {
@@ -69,8 +68,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     externalNativeBuild {
