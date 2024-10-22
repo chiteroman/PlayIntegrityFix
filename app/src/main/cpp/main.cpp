@@ -2,7 +2,7 @@
 #include <sys/system_properties.h>
 #include <unistd.h>
 #include "zygisk.hpp"
-#include "shadowhook.h"
+#include "dobby.h"
 #include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
@@ -48,13 +48,10 @@ static std::string DEVICE_INITIAL_SDK_INT, SECURITY_PATCH, BUILD_ID;
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
 static T_Callback o_callback = nullptr;
-static void *o_cookie = nullptr;
 
 static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
 
-    if (!cookie || !name || !value || !o_callback || !o_cookie) return;
-
-    if (cookie != o_cookie) return;
+    if (!cookie || !name || !value || !o_callback) return;
 
     std::string_view prop(name);
 
@@ -80,29 +77,17 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 static void (*o_system_property_read_callback)(prop_info *, T_Callback, void *) = nullptr;
 
 static void my_system_property_read_callback(prop_info *pi, T_Callback callback, void *cookie) {
-    if (pi && callback && cookie) {
-        o_callback = callback;
-        o_cookie = cookie;
-    }
+    if (pi && callback && cookie) o_callback = callback;
     return o_system_property_read_callback(pi, modify_callback, cookie);
 }
 
 static bool doHook() {
-    if (shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true) != 0) {
-        LOGE("shadowhook failed to init!");
-        return false;
-    }
+    LOGD("loaded Dobby version: %s", DobbyGetVersion());
 
-    LOGD("loaded shadowhook version: %s", SHADOWHOOK_VERSION);
+    void *ptr = DobbySymbolResolver(nullptr, "__system_property_read_callback");
 
-    void *ptr = shadowhook_hook_sym_name(
-            "libc.so",
-            "__system_property_read_callback",
-            (void *) my_system_property_read_callback,
-            (void **) &o_system_property_read_callback
-    );
-
-    if (ptr) {
+    if (ptr && !DobbyHook(ptr, (void *) my_system_property_read_callback,
+                          (void **) &o_system_property_read_callback)) {
         LOGD("hook __system_property_read_callback successful at %p", ptr);
         return true;
     }

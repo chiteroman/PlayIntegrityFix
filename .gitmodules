@@ -1,0 +1,3 @@
+[submodule "app/src/main/cpp/Dobby"]
+	path = app/src/main/cpp/Dobby
+	url = https://github.com/chiteroman/Dobby.git
