@@ -6,7 +6,7 @@ android {
     namespace = "es.chiteroman.playintegrityfix"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    ndkVersion = "27.1.12297006"
+    ndkVersion = "27.2.12479018"
 
     buildFeatures {
         prefab = true
@@ -35,7 +35,6 @@ android {
 
                 arguments(
                     "-DCMAKE_BUILD_TYPE=Release",
-                    "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON",
                     "-DANDROID_STL=none",
                     "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
                 )
@@ -76,7 +75,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.30.3"
+            version = "3.22.1"
         }
     }
 }
