@@ -1,3 +1,12 @@
+# Don't flash in recovery!
+if ! $BOOTMODE; then
+    ui_print "*********************************************************"
+    ui_print "! Install from recovery is NOT supported"
+    ui_print "! Recovery sucks"
+    ui_print "! Please install from Magisk / KernelSU / APatch app"
+    abort    "*********************************************************"
+fi
+
 # Module requires Zygisk to work
 isZygiskEnabled=$(magisk --sqlite "SELECT value FROM settings WHERE key='zygisk';")
 if [ "$isZygiskEnabled" == "value=0" ] && [ ! -d "/data/adb/modules/zygisksu" ]; then
@@ -15,10 +24,9 @@ if [ -d "/data/adb/modules/safetynet-fix" ]; then
     ui_print "! safetynet-fix module removed. Do NOT install it again along PIF"
 fi
 
-# playcurl must be removed when flashing PIF
+# playcurl warn
 if [ -d "/data/adb/modules/playcurl" ]; then
-    touch "/data/adb/modules/playcurl/remove"
-    ui_print "! playcurl module removed!"
+    ui_print "! playcurl may overwrite fingerprint with invalid one, be careful!"
 fi
 
 # MagiskHidePropsConf module is obsolete in Android 8+ but it shouldn't give issues
@@ -28,6 +36,29 @@ fi
 
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
-    mv -f "/data/adb/pif.json" "/data/adb/pif.json.old"
-    ui_print "- Backup custom pif.json"
+    ui_print "!!! WARNING !!!"
+    ui_print "- You are using custom pif.json (/data/adb/pif.json)"
+    ui_print "- Remove that file if you can't pass attestation test!"
 fi
+
+# Uninstall conflict apps
+APPS="
+/system/app/EliteDevelopmentModule
+/system/app/XInjectModule
+/system/product/app/XiaomiEUInject
+/system/product/app/XiaomiEUInject-Stub
+/system/system_ext/app/hentaiLewdbSVTDummy
+/system/system_ext/app/PifPrebuilt
+"
+
+for APP in $APPS; do
+    if [ -d "$APP" ]; then
+        mkdir -p "${MODPATH}${APP}"
+        if [ "$KSU" = true ] || [ "$APATCH" = true ]; then
+            mknod "${MODPATH}${APP}" c 0 0
+        else
+            touch "${MODPATH}${APP}/.replace"
+        fi
+        ui_print "- Removed: $(basename "$APP")"
+    fi
+done

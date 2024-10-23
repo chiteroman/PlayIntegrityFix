@@ -1,10 +1,34 @@
 MODPATH="${0%/*}"
-. $MODPATH/common_func.sh
+. "$MODPATH"/common_func.sh
 
 # Remove Play Services from Magisk DenyList when set to Enforce in normal mode
 if magisk --denylist status; then
     magisk --denylist rm com.google.android.gms
+else
+    # If DenyList is disabled, maybe you are using Shamiko
+    magisk --denylist add com.google.android.gms com.google.android.gms.unstable
 fi
+
+# Uninstall conflict apps
+APPS="
+/system/app/EliteDevelopmentModule
+/system/app/XInjectModule
+/system/product/app/XiaomiEUInject
+/system/product/app/XiaomiEUInject-Stub
+/system/system_ext/app/hentaiLewdbSVTDummy
+/system/system_ext/app/PifPrebuilt
+"
+
+for APP in $APPS; do
+    if [ -d "$APP" ]; then
+        mkdir -p "${MODPATH}${APP}"
+        if [ "$KSU" = true ] || [ "$APATCH" = true ]; then
+            mknod "${MODPATH}${APP}" c 0 0
+        else
+            touch "${MODPATH}${APP}/.replace"
+        fi
+    fi
+done
 
 # Conditional early sensitive properties
 
@@ -22,12 +46,12 @@ resetprop_if_diff ro.is_ever_orange 0
 
 # Microsoft
 for PROP in $(resetprop | grep -oE 'ro.*.build.tags'); do
-    resetprop_if_diff $PROP release-keys
+    resetprop_if_diff "$PROP" release-keys
 done
 
 # Other
 for PROP in $(resetprop | grep -oE 'ro.*.build.type'); do
-    resetprop_if_diff $PROP user
+    resetprop_if_diff "$PROP" user
 done
 resetprop_if_diff ro.adb.secure 1
 resetprop_if_diff ro.debuggable 0
