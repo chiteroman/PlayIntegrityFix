@@ -7,15 +7,15 @@ If not, try removing /data/adb/pif.json file.
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-If your ROM is signed with test-keys, modify "spoofSignature" value in
-/data/adb/modules/playintegrityfix/pif.json and set to "true".
-Remember to kill com.google.android.gms.unstable process after this!
-
 If you are using TrickyStore and you have a valid keybox, but Strong
 isn't passing, maybe you should change the ROM.
 Stock ROMs gives the best results.
 
-# v17.7
+# v17.8
 
-- Update Gradle and AGP
-- Update fingerprint (fix RCS)
+- Auto parse fields from fingerprint!
+- Auto detect test signed ROM!
+- Auto remove conflict apps!
+- Auto add GMS to denylist if using Shamiko!
+- Back to Dobby (my version: https://github.com/chiteroman/Dobby.git)
+- Other improvements
