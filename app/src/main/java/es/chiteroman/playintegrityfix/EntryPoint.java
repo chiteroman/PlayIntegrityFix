@@ -181,15 +181,16 @@ public final class EntryPoint {
         jsonObject.keys().forEachRemaining(key -> {
             Field field = getBuildField(key);
             if (field == null) return;
-            field.setAccessible(true);
-            String value;
             try {
-                value = jsonObject.getString(key);
+                String value = jsonObject.getString(key);
+                if (value.isBlank()) {
+                    Log.w(TAG, "Field '" + key + "' have an empty value!");
+                } else {
+                    map.put(field, value);
+                }
             } catch (Throwable t) {
                 Log.e(TAG, "init", t);
-                return;
             }
-            map.putIfAbsent(field, value);
         });
 
         Log.i(TAG, "Parsed " + map.size() + " fields from JSON");
@@ -200,9 +201,14 @@ public final class EntryPoint {
     public static void spoofFields() {
         map.forEach((field, value) -> {
             try {
+                field.setAccessible(true);
                 String oldValue = (String) field.get(null);
-                if (value.equals(oldValue)) return;
+                if (value.equals(oldValue)) {
+                    field.setAccessible(false);
+                    return;
+                }
                 field.set(null, value);
+                field.setAccessible(false);
                 Log.i(TAG, "Set '" + field.getName() + "' to '" + value + "'");
             } catch (Throwable t) {
                 Log.e(TAG, "spoofFields", t);

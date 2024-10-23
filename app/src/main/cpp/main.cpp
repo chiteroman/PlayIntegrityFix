@@ -53,9 +53,15 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
 
     if (!cookie || !name || !value || !o_callback) return;
 
+    const char *oldValue = value;
+
     std::string_view prop(name);
 
-    if (prop.ends_with("api_level")) {
+    if (prop == "init.svc.adbd") {
+        value = "stopped";
+    } else if (prop == "sys.usb.state") {
+        value = "mtp";
+    } else if (prop.ends_with("api_level")) {
         if (!DEVICE_INITIAL_SDK_INT.empty()) {
             value = DEVICE_INITIAL_SDK_INT.c_str();
         }
@@ -69,7 +75,11 @@ static void modify_callback(void *cookie, const char *name, const char *value, u
         }
     }
 
-    if (DEBUG) LOGD("[%s]: '%s'", name, value);
+    if (strcmp(oldValue, value) == 0) {
+        if (DEBUG) LOGD("[%s]: %s (unchanged)", name, oldValue);
+    } else {
+        LOGD("[%s]: %s -> %s", name, oldValue, value);
+    }
 
     return o_callback(cookie, name, value, serial);
 }
@@ -82,12 +92,10 @@ static void my_system_property_read_callback(prop_info *pi, T_Callback callback,
 }
 
 static bool doHook() {
-    LOGD("loaded Dobby version: %s", DobbyGetVersion());
-
     void *ptr = DobbySymbolResolver(nullptr, "__system_property_read_callback");
 
-    if (ptr && !DobbyHook(ptr, (void *) my_system_property_read_callback,
-                          (void **) &o_system_property_read_callback)) {
+    if (ptr && DobbyHook(ptr, (void *) my_system_property_read_callback,
+                         (void **) &o_system_property_read_callback) == 0) {
         LOGD("hook __system_property_read_callback successful at %p", ptr);
         return true;
     }
@@ -166,6 +174,9 @@ public:
         bool trickyStore = false;
         xread(fd, &trickyStore, sizeof(trickyStore));
 
+        bool testSignedRom = false;
+        xread(fd, &testSignedRom, sizeof(testSignedRom));
+
         close(fd);
 
         LOGD("Dex file size: %d", dexSize);
@@ -177,6 +188,11 @@ public:
             LOGD("TrickyStore module detected!");
             spoofProvider = false;
             spoofProps = false;
+        }
+
+        if (testSignedRom) {
+            LOGD("--- ROM IS SIGNED WITH TEST KEYS ---");
+            spoofSignature = true;
         }
     }
 
@@ -213,8 +229,8 @@ private:
     JNIEnv *env = nullptr;
     std::vector<uint8_t> dexVector;
     nlohmann::json json;
-    bool spoofProps = false;
-    bool spoofProvider = false;
+    bool spoofProps = true;
+    bool spoofProvider = true;
     bool spoofSignature = false;
 
     void dlclose() {
@@ -224,14 +240,6 @@ private:
 
     void parseJSON() {
         if (json.empty()) return;
-
-        if (json.contains("ID") && json["ID"].is_string()) {
-            BUILD_ID = json["ID"].get<std::string>();
-        }
-
-        if (json.contains("SECURITY_PATCH") && json["SECURITY_PATCH"].is_string()) {
-            SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
-        }
 
         if (json.contains("DEVICE_INITIAL_SDK_INT")) {
             if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
@@ -246,18 +254,57 @@ private:
 
         if (json.contains("spoofProvider") && json["spoofProvider"].is_boolean()) {
             spoofProvider = json["spoofProvider"].get<bool>();
+            json.erase("spoofProvider");
         }
 
         if (json.contains("spoofProps") && json["spoofProps"].is_boolean()) {
             spoofProps = json["spoofProps"].get<bool>();
+            json.erase("spoofProps");
         }
 
         if (json.contains("spoofSignature") && json["spoofSignature"].is_boolean()) {
             spoofSignature = json["spoofSignature"].get<bool>();
+            json.erase("spoofSignature");
         }
 
         if (json.contains("DEBUG") && json["DEBUG"].is_boolean()) {
             DEBUG = json["DEBUG"].get<bool>();
+            json.erase("DEBUG");
+        }
+
+        if (json.contains("FINGERPRINT") && json["FINGERPRINT"].is_string()) {
+            std::string fingerprint = json["FINGERPRINT"].get<std::string>();
+
+            std::vector<std::string> vector;
+            auto parts = fingerprint | std::views::split('/');
+
+            for (const auto &part: parts) {
+                auto subParts = std::string(part.begin(), part.end()) | std::views::split(':');
+                for (const auto &subPart: subParts) {
+                    vector.emplace_back(subPart.begin(), subPart.end());
+                }
+            }
+
+            if (vector.size() == 8) {
+                json["BRAND"] = vector[0];
+                json["PRODUCT"] = vector[1];
+                json["DEVICE"] = vector[2];
+                json["RELEASE"] = vector[3];
+                json["ID"] = vector[4];
+                json["INCREMENTAL"] = vector[5];
+                json["TYPE"] = vector[6];
+                json["TAGS"] = vector[7];
+            } else {
+                LOGE("Error parsing fingerprint values!");
+            }
+        }
+
+        if (json.contains("SECURITY_PATCH") && json["SECURITY_PATCH"].is_string()) {
+            SECURITY_PATCH = json["SECURITY_PATCH"].get<std::string>();
+        }
+
+        if (json.contains("ID") && json["ID"].is_string()) {
+            BUILD_ID = json["ID"].get<std::string>();
         }
     }
 
@@ -378,6 +425,26 @@ static std::vector<uint8_t> readFile(const char *path) {
     return vector;
 }
 
+static bool checkOtaZip() {
+    std::array<char, 128> buffer{};
+    std::string result;
+    bool found = false;
+
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(
+            popen("unzip -l /system/etc/security/otacerts.zip", "r"), pclose);
+    if (!pipe) return false;
+
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+        if (result.find("test") != std::string::npos) {
+            found = true;
+            break;
+        }
+    }
+
+    return found;
+}
+
 static void companion(int fd) {
 
     std::vector<uint8_t> dex, json;
@@ -403,6 +470,9 @@ static void companion(int fd) {
 
     bool trickyStore = std::filesystem::exists(TS_PATH);
     xwrite(fd, &trickyStore, sizeof(trickyStore));
+
+    bool testSignedRom = checkOtaZip();
+    xwrite(fd, &testSignedRom, sizeof(testSignedRom));
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
