@@ -6,7 +6,9 @@ if magisk --denylist status; then
     magisk --denylist rm com.google.android.gms
 else
     # If DenyList is disabled, maybe you are using Shamiko
-    magisk --denylist add com.google.android.gms com.google.android.gms.unstable
+    if [ ! -f "/data/adb/shamiko/whitelist" ]; then
+        magisk --denylist add com.google.android.gms com.google.android.gms.unstable
+    fi
 fi
 
 # Uninstall conflict apps
