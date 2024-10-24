@@ -13,8 +13,8 @@ fi
 
 # safetynet-fix module is obsolete and it's incompatible with PIF
 SNFix="/data/adb/modules/safetynet-fix"
-if [ -d $SNFix ]; then
-    rm -rf $SNFix
+if [ -d "$SNFix" ]; then
+    touch "$SNFix"/remove
 fi
 
 # Uninstall conflict apps
