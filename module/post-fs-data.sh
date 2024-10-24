@@ -17,6 +17,8 @@ if [ -d "$SNFix" ]; then
     touch "$SNFix"/remove
 fi
 
+rm -rf "$MODPATH"/system
+
 # Uninstall conflict apps
 APPS="
 /system/app/EliteDevelopmentModule
@@ -28,12 +30,14 @@ APPS="
 "
 
 for APP in $APPS; do
-    HIDEPATH="$MODPATH$APP"
-    mkdir -p "$HIDEPATH"
-    if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; then
-        setfattr -n trusted.overlay.opaque -v y "$HIDEPATH"
-    else
-        touch "$HIDEPATH"/.replace
+    if [ -d "$APP" ]; then
+        HIDEPATH="$MODPATH$APP"
+        mkdir -p "$HIDEPATH"
+        if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; then
+            setfattr -n trusted.overlay.opaque -v y "$HIDEPATH"
+        else
+            touch "$HIDEPATH"/.replace
+        fi
     fi
 done
 
