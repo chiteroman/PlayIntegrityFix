@@ -51,3 +51,6 @@ resetprop_if_match() {
 
     [[ "$(resetprop "$NAME")" = *"$CONTAINS"* ]] && $RESETPROP "$NAME" "$VALUE"
 }
+
+# stub for boot-time
+ui_print() { return; }

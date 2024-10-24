@@ -11,6 +11,12 @@ else
     fi
 fi
 
+# safetynet-fix module is obsolete and it's incompatible with PIF
+SNFix="/data/adb/modules/safetynet-fix"
+if [ -d $SNFix ]; then
+    rm -rf $SNFix
+fi
+
 # Uninstall conflict apps
 APPS="
 /system/app/EliteDevelopmentModule
@@ -22,13 +28,12 @@ APPS="
 "
 
 for APP in $APPS; do
-    if [ -d "$APP" ]; then
-        mkdir -p "${MODPATH}${APP}"
-        if [ "$KSU" = true ] || [ "$APATCH" = true ]; then
-            mknod "${MODPATH}${APP}" c 0 0
-        else
-            touch "${MODPATH}${APP}/.replace"
-        fi
+    HIDEPATH="$MODPATH$APP"
+    mkdir -p "$HIDEPATH"
+    if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; then
+        setfattr -n trusted.overlay.opaque -v y "$HIDEPATH"
+    else
+        touch "$HIDEPATH"/.replace
     fi
 done
 

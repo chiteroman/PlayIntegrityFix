@@ -18,12 +18,6 @@ if [ "$API" -lt 26 ]; then
     abort "! You can't use this module on Android < 8.0"
 fi
 
-# safetynet-fix module is obsolete and it's incompatible with PIF
-if [ -d "/data/adb/modules/safetynet-fix" ]; then
-    touch "/data/adb/modules/safetynet-fix/remove"
-    ui_print "! safetynet-fix module removed. Do NOT install it again along PIF"
-fi
-
 # playcurl warn
 if [ -d "/data/adb/modules/playcurl" ]; then
     ui_print "! playcurl may overwrite fingerprint with invalid one, be careful!"
@@ -40,25 +34,3 @@ if [ -f "/data/adb/pif.json" ]; then
     ui_print "- You are using custom pif.json (/data/adb/pif.json)"
     ui_print "- Remove that file if you can't pass attestation test!"
 fi
-
-# Uninstall conflict apps
-APPS="
-/system/app/EliteDevelopmentModule
-/system/app/XInjectModule
-/system/product/app/XiaomiEUInject
-/system/product/app/XiaomiEUInject-Stub
-/system/system_ext/app/hentaiLewdbSVTDummy
-/system/system_ext/app/PifPrebuilt
-"
-
-for APP in $APPS; do
-    if [ -d "$APP" ]; then
-        mkdir -p "${MODPATH}${APP}"
-        if [ "$KSU" = true ] || [ "$APATCH" = true ]; then
-            mknod "${MODPATH}${APP}" c 0 0
-        else
-            touch "${MODPATH}${APP}/.replace"
-        fi
-        ui_print "- Removed: $(basename "$APP")"
-    fi
-done
