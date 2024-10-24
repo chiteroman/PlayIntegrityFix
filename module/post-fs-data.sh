@@ -20,28 +20,6 @@ fi
 
 rm -rf "$MODPATH"/system
 
-# Uninstall conflict apps
-APPS="
-/system/app/EliteDevelopmentModule
-/system/app/XInjectModule
-/system/product/app/XiaomiEUInject
-/system/product/app/XiaomiEUInject-Stub
-/system/system_ext/app/hentaiLewdbSVTDummy
-/system/system_ext/app/PifPrebuilt
-"
-
-for APP in $APPS; do
-    if [ -d "$APP" ]; then
-        HIDEPATH="$MODPATH$APP"
-        mkdir -p "$HIDEPATH"
-        if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; then
-            setfattr -n trusted.overlay.opaque -v y "$HIDEPATH"
-        else
-            touch "$HIDEPATH"/.replace
-        fi
-    fi
-done
-
 # Conditional early sensitive properties
 
 # Samsung

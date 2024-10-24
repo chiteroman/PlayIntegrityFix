@@ -1,5 +1,5 @@
 MODPATH="${0%/*}"
-. $MODPATH/common_func.sh
+. "$MODPATH"/common_func.sh
 
 # Conditional sensitive properties
 
@@ -43,3 +43,18 @@ resetprop_if_diff vendor.boot.vbmeta.device_state locked
 
 # Other
 resetprop_if_diff sys.oem_unlock_allowed 0
+
+# Disable and uninstall conflict apps
+APPS="
+eu.xiaomi.module.inject
+"
+
+for APP in $APPS; do
+    if pm list packages | grep -q "$APP"; then
+        pm disable --user 0 "$APP"
+        pm disable "$APP"
+
+        pm uninstall --user 0 "$APP"
+        pm uninstall "$APP"
+    fi
+done
