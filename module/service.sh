@@ -47,6 +47,7 @@ resetprop_if_diff sys.oem_unlock_allowed 0
 # Disable and uninstall conflict apps
 APPS="
 eu.xiaomi.module.inject
+com.elitedevelopment.module
 "
 
 for APP in $APPS; do
