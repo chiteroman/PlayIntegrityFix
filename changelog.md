@@ -11,11 +11,8 @@ If you are using TrickyStore and you have a valid keybox, but Strong
 isn't passing, maybe you should change the ROM.
 Stock ROMs gives the best results.
 
-# v17.8
+# v17.9
 
-- Auto parse fields from fingerprint!
-- Auto detect test signed ROM!
-- Auto remove conflict apps!
-- Auto add GMS to denylist if using Shamiko!
-- Back to Dobby (my version: https://github.com/chiteroman/Dobby.git)
-- Other improvements
+- Update fingerprint to latest beta (thanks to XiaomiEU devs)
+- Fix Shamiko whitelist bug
+- Fix bootloops on XiaomiEU custom roms

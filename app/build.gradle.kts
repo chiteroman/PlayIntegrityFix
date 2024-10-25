@@ -25,8 +25,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17800
-        versionName = "v17.8"
+        versionCode = 17900
+        versionName = "v17.9"
         multiDexEnabled = false
 
         externalNativeBuild {
