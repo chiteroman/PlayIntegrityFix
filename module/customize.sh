@@ -10,6 +10,8 @@ fi
 if [ ! -d "/data/adb/modules/zygisksu" ]; then
     if [ -d "/data/adb/magisk" ]; then
         [ ! "$(magisk --sqlite "SELECT value FROM settings WHERE key='zygisk';")" == "value=0" ] || abort "! Zygisk is not enabled. Please, enable Zygisk in Magisk settings or install ZygiskNext or ReZygisk module."
+    else
+        abort "! Zygisk is not enabled. Please, enable Zygisk in Magisk settings or install ZygiskNext or ReZygisk module."
     fi
 fi
 
