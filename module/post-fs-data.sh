@@ -12,14 +12,6 @@ else
     fi
 fi
 
-# safetynet-fix module is obsolete and it's incompatible with PIF
-SNFix="/data/adb/modules/safetynet-fix"
-if [ -d "$SNFix" ]; then
-    touch "$SNFix"/remove
-fi
-
-rm -rf "$MODPATH"/system
-
 # Conditional early sensitive properties
 
 # Samsung
