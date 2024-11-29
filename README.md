@@ -52,4 +52,4 @@ https://xdaforums.com/t/pif-faq.4653307/
 https://github.com/chiteroman/PlayIntegrityFix/releases/latest
 
 ## Donations
-[PayPal](https://www.paypal.com/paypalme/chiteroman)
+[PayPal](https://www.paypal.com/paypalme/chiteroman0)
