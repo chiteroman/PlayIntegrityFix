@@ -1,7 +1,7 @@
 {
-  "FINGERPRINT": "google/oriole_beta/oriole:15/BP11.241025.006/12620009:user/release-keys",
+  "FINGERPRINT": "google/tokay_beta/tokay:15/BP11.241025.006/12620009:user/release-keys",
   "MANUFACTURER": "Google",
-  "MODEL": "Pixel 6",
+  "MODEL": "Pixel 9",
   "SECURITY_PATCH": "2024-11-05",
   "DEVICE_INITIAL_SDK_INT": 21
 }
