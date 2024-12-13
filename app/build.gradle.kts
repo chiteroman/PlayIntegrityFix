@@ -25,17 +25,15 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18000
-        versionName = "v18.0"
+        versionCode = 18100
+        versionName = "v18.1"
         multiDexEnabled = false
 
         externalNativeBuild {
             cmake {
                 arguments(
-                    "-DCMAKE_BUILD_TYPE=Release",
-                    "-DANDROID_STL=none",
-                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
-                    "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON"
+                    "-DCMAKE_BUILD_TYPE=MinSizeRel",
+                    "-DANDROID_STL=none"
                 )
 
                 cFlags(
@@ -74,7 +72,6 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.31.0"
         }
     }
 }
