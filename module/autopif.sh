@@ -1,5 +1,7 @@
 #!/bin/sh
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
+
+# functions
 die() { echo "Error: $@!"; exit 1; }
 
 find_busybox() {
@@ -10,9 +12,13 @@ if date -D '%s' -d "$(date '+%s')" 2>&1 | grep -qE "bad date|invalid option"; th
     find_busybox && date() { $BUSYBOX date "$@"; } || die "date broken"
 fi
 
-if { ! command -v wget >/dev/null 2>&1 || grep -q "wget-curl" "$(command -v wget 2>/dev/null)"; }; then
-    find_busybox && wget() { $BUSYBOX wget "$@"; } || die "wget not found, install busybox"
-fi
+download() {
+	if command -v curl > /dev/null 2>&1; then
+		curl --connect-timeout 10 -s "$1"
+        else
+		busybox wget -T 10 --no-check-certificate -qO - "$1"
+        fi
+}  
 
 if echo -e "A\nB" | grep -q "A.*B"; then
     find_busybox || die "grep broken"
@@ -34,7 +40,7 @@ DIR="$MODPATH/autopif"
 mkdir -p "$DIR"
 cd "$DIR"
 
-wget -q -O PIXEL_GSI_HTML --no-check-certificate https://developer.android.com/topic/generic-system-image/releases || exit 1
+download https://developer.android.com/topic/generic-system-image/releases > PIXEL_GSI_HTML|| exit 1
 grep -m1 -o 'li>.*(Beta)' PIXEL_GSI_HTML | cut -d\> -f2
 
 BETA_REL_DATE="$(date -D '%B %e, %Y' -d "$(grep -m1 -o 'Date:.*' PIXEL_GSI_HTML | cut -d' ' -f2-4)" '+%Y-%m-%d')"
@@ -46,13 +52,13 @@ RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o
 ID="$(grep -m1 -o 'Build:.*' PIXEL_GSI_HTML | cut -d' ' -f2)"
 INCREMENTAL="$(grep -m1 -o "$ID-.*-" PIXEL_GSI_HTML | cut -d- -f2)"
 
-wget -q -O PIXEL_GET_HTML --no-check-certificate https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2) || exit 1
-wget -q -O PIXEL_BETA_HTML --no-check-certificate https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2) || exit 1
+download "https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_GET_HTML || exit 1
+download "https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_BETA_HTML || exit 1
 
 MODEL_LIST="$(grep -A1 'tr id=' PIXEL_BETA_HTML | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')"
 PRODUCT_LIST="$(grep -o 'factory/.*_beta' PIXEL_BETA_HTML | cut -d/ -f2)"
 
-wget -q -O PIXEL_SECBULL_HTML --no-check-certificate https://source.android.com/docs/security/bulletin/pixel || exit 1
+download https://source.android.com/docs/security/bulletin/pixel > PIXEL_SECBULL_HTML|| exit 1
 
 SECURITY_PATCH="$(grep -A15 "$(grep -m1 -o 'Security patch level:.*' PIXEL_GSI_HTML | cut -d' ' -f4-)" PIXEL_SECBULL_HTML | grep -m1 -B1 '</tr>' | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')"
 
