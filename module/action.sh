@@ -1,18 +1,29 @@
 #!/bin/sh
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
 MODDIR=/data/adb/modules/playintegrityfix
+version=$(grep "^version=" $MODDIR/module.prop | sed 's/version=//g' )
 
+echo "[+] PlayIntegrityFix $version"
+echo "[+] $(basename "$0")"
+printf "\n\n"
 
 download() { busybox wget -T 10 --no-check-certificate -qO - "$1"; }
-
 if command -v curl > /dev/null 2>&1; then
 	download() { curl --connect-timeout 10 -s "$1"; }
 fi
 
+sleep_pause() {
+	# APatch and KernelSU needs this
+	if [ -z "$MMRL" ] && { [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; }; then
+		sleep 5
+	fi
+}
 
 set_random_beta() {
     if [ "$(echo "$MODEL_LIST" | wc -l)" -ne "$(echo "$PRODUCT_LIST" | wc -l)" ]; then
         echo "Error: MODEL_LIST and PRODUCT_LIST have different lengths."
+        sleep_pause
+        exit 1
     fi
     count=$(echo "$MODEL_LIST" | wc -l)
     rand_index=$(( $$ % count ))
@@ -22,8 +33,9 @@ set_random_beta() {
 }
 
 download_fail() {
-	echo "- download failed!"
-	echo "- bailing out!"
+	echo "[!] download failed!"
+	echo "[x] bailing out!"
+	sleep_pause
 	exit 1
 }
 
@@ -81,3 +93,6 @@ for i in $(busybox pidof com.google.android.gms.unstable); do
 	echo "- Killing pid $i"
 	kill -9 "$i"
 done
+
+echo "- Done!"
+sleep_pause
