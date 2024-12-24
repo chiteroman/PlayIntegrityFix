@@ -2,13 +2,13 @@
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
 MODDIR=/data/adb/modules/playintegrityfix
 
-download() {
-	if command -v curl > /dev/null 2>&1; then
-		curl --connect-timeout 10 -s "$1"
-        else
-		busybox wget -T 10 --no-check-certificate -qO - "$1"
-        fi
-}  
+
+download() { busybox wget -T 10 --no-check-certificate -qO - "$1"; }
+
+if command -v curl > /dev/null 2>&1; then
+	download() { curl --connect-timeout 10 -s "$1"; }
+fi
+
 
 set_random_beta() {
     if [ "$(echo "$MODEL_LIST" | wc -l)" -ne "$(echo "$PRODUCT_LIST" | wc -l)" ]; then
@@ -24,7 +24,7 @@ set_random_beta() {
 download_fail() {
 	echo "- download failed!"
 	echo "- bailing out!"
-	exit 0
+	exit 1
 }
 
 # lets try to use tmpfs for processing
