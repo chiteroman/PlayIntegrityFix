@@ -21,17 +21,20 @@ set_random_beta() {
     DEVICE=$(echo "$PRODUCT" | sed 's/_beta//')
 }
 
+download_fail() {
+	echo "- download failed!"
+	echo "- bailing out!"
+	exit 0
+}
+
 # lets try to use tmpfs for processing
-TEMPDIR="$MODDIR/autopif"
-[ -w /sbin ] && TEMPDIR="/sbin/autopif"
-[ -w /debug_ramdisk ] && TEMPDIR="/debug_ramdisk/autopif"
+TEMPDIR="$MODDIR/temp" #fallback
+[ -w /sbin ] && TEMPDIR="/sbin/playintegrityfix"
+[ -w /debug_ramdisk ] && TEMPDIR="/debug_ramdisk/playintegrityfix"
 mkdir -p "$TEMPDIR"
 cd "$TEMPDIR"
 
-download https://developer.android.com/topic/generic-system-image/releases > PIXEL_GSI_HTML || {
-	echo "download failed!"
-	exit 0
-	}
+download https://developer.android.com/topic/generic-system-image/releases > PIXEL_GSI_HTML || download_fail
 grep -m1 -o 'li>.*(Beta)' PIXEL_GSI_HTML | cut -d\> -f2
 grep -m1 -o 'Date:.*' PIXEL_GSI_HTML
 
@@ -39,22 +42,13 @@ RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o
 ID="$(grep -m1 -o 'Build:.*' PIXEL_GSI_HTML | cut -d' ' -f2)"
 INCREMENTAL="$(grep -m1 -o "$ID-.*-" PIXEL_GSI_HTML | cut -d- -f2)"
 
-download "https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_GET_HTML || {
-	echo "download failed!"
-	exit 0
-	}
-download "https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_BETA_HTML || {
-	echo "download failed!"
-	exit 0
-	}
+download "https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_GET_HTML || download_fail
+download "https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_BETA_HTML || download_fail
 
 MODEL_LIST="$(grep -A1 'tr id=' PIXEL_BETA_HTML | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')"
 PRODUCT_LIST="$(grep -o 'factory/.*_beta' PIXEL_BETA_HTML | cut -d/ -f2)"
 
-download https://source.android.com/docs/security/bulletin/pixel > PIXEL_SECBULL_HTML || {
-	echo "download failed!"
-	exit 0
-	}
+download https://source.android.com/docs/security/bulletin/pixel > PIXEL_SECBULL_HTML || download_fail
 
 SECURITY_PATCH="$(grep -A15 "$(grep -m1 -o 'Security patch level:.*' PIXEL_GSI_HTML | cut -d' ' -f4-)" PIXEL_SECBULL_HTML | grep -m1 -B1 '</tr>' | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')"
 
@@ -77,15 +71,13 @@ cat <<EOF | tee pif.json
 }
 EOF
 
-cp "$TEMPDIR/pif.json" "/data/adb/pif.json"
+cat "$TEMPDIR/pif.json" > /data/adb/pif.json
 echo "- new pif.json saved to /data/adb/pif.json"
-
-cd "$MODPATH"
 
 echo "- Cleaning up ..."
 rm -rf "$TEMPDIR"
 
 for i in $(busybox pidof com.google.android.gms.unstable); do
 	echo "- Killing pid $i"
-	kill -9 $i 
+	kill -9 "$i"
 done
