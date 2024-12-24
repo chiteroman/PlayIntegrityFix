@@ -1,16 +1,9 @@
 #!/bin/sh
-
+PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
 die() { echo "Error: $@!"; exit 1; }
 
 find_busybox() {
-    [ -n "$BUSYBOX" ] && exit 0
-    for path in /data/adb/modules/busybox-ndk/system/*/busybox /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
-        if [ -f "$path" ]; then
-            BUSYBOX="$path"
-            exit 0
-        fi
-    done
-    exit 1
+    command -v busybox "$@"
 }
 
 if date -D '%s' -d "$(date '+%s')" 2>&1 | grep -qE "bad date|invalid option"; then
