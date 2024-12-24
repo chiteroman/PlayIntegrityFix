@@ -40,13 +40,12 @@ DIR="$MODPATH/autopif"
 mkdir -p "$DIR"
 cd "$DIR"
 
-download https://developer.android.com/topic/generic-system-image/releases > PIXEL_GSI_HTML|| exit 1
+download https://developer.android.com/topic/generic-system-image/releases > PIXEL_GSI_HTML || {
+	echo "download failed!"
+	exit 0
+	}
 grep -m1 -o 'li>.*(Beta)' PIXEL_GSI_HTML | cut -d\> -f2
-
-BETA_REL_DATE="$(date -D '%B %e, %Y' -d "$(grep -m1 -o 'Date:.*' PIXEL_GSI_HTML | cut -d' ' -f2-4)" '+%Y-%m-%d')"
-BETA_EXP_DATE="$(date -D '%s' -d "$(expr $(date -D '%Y-%m-%d' -d "$BETA_REL_DATE" '+%s') + 60 \* 60 \* 24 \* 7 \* 6)" '+%Y-%m-%d')"
-echo "Beta Released: $BETA_REL_DATE"
-echo "Estimated Expiry: $BETA_EXP_DATE"
+grep -m1 -o 'Date:.*' PIXEL_GSI_HTML
 
 RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o '/versions/.*' | cut -d/ -f3)"
 ID="$(grep -m1 -o 'Build:.*' PIXEL_GSI_HTML | cut -d' ' -f2)"
