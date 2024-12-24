@@ -1,5 +1,6 @@
 #!/bin/sh
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
+MODDIR=/data/adb/modules/playintegrityfix
 
 download() {
 	if command -v curl > /dev/null 2>&1; then
@@ -20,9 +21,12 @@ set_random_beta() {
     DEVICE=$(echo "$PRODUCT" | sed 's/_beta//')
 }
 
-DIR="$MODPATH/autopif"
-mkdir -p "$DIR"
-cd "$DIR"
+# lets use tmpfs for processing
+TEMPDIR="$MODDIR/autopif"
+[ -w /sbin ] && TEMPDIR="/sbin/autopif"
+[ -w /debug_ramdisk ] && TEMPDIR="/debug_ramdisk/autopif"
+mkdir -p "$TEMPDIR"
+cd "$TEMPDIR"
 
 download https://developer.android.com/topic/generic-system-image/releases > PIXEL_GSI_HTML || {
 	echo "download failed!"
@@ -73,12 +77,12 @@ cat <<EOF | tee pif.json
 }
 EOF
 
-cp "$DIR/pif.json" "/data/adb/pif.json"
+cp "$TEMPDIR/pif.json" "/data/adb/pif.json"
 echo "- new pif.json saved to /data/adb/pif.json"
 
 cd "$MODPATH"
 
 echo "- Cleaning up ..."
-rm -rf "$DIR"
+rm -rf "$TEMPDIR"
 
 su -c killall com.google.android.gms.unstable || echo ""
