@@ -45,6 +45,10 @@ And in SafetyNet you should get this:
 
 NOTE: Strong verdict is impossible to pass on unlocked bootloader devices, there are few devices and "exploits" which will allow you to pass it, but, in normal conditions, this verdict will be green only if you are using stock ROM and locked bootloader. The old posts talking about Strong pass was an "exploit" in Google servers, obviously, now it's patched.
 
+## Acknowledgments
+- [kdrag0n](https://github.com/kdrag0n/safetynet-fix) & [Displax](https://github.com/Displax/safetynet-fix) for the original idea.
+- [osm0sis](https://github.com/osm0sis) for his original [autopif2.sh](https://github.com/osm0sis/PlayIntegrityFork/blob/main/module/autopif2.sh) script, and [backslashxx](https://github.com/backslashxx) & [KOWX712](https://github.com/KOWX712) for improving it ([action.sh](https://github.com/chiteroman/PlayIntegrityFix/blob/main/module/action.sh)).
+
 ## FAQ
 https://xdaforums.com/t/pif-faq.4653307/
 
