@@ -21,7 +21,7 @@ set_random_beta() {
     DEVICE=$(echo "$PRODUCT" | sed 's/_beta//')
 }
 
-# lets use tmpfs for processing
+# lets try to use tmpfs for processing
 TEMPDIR="$MODDIR/autopif"
 [ -w /sbin ] && TEMPDIR="/sbin/autopif"
 [ -w /debug_ramdisk ] && TEMPDIR="/debug_ramdisk/autopif"
@@ -85,4 +85,7 @@ cd "$MODPATH"
 echo "- Cleaning up ..."
 rm -rf "$TEMPDIR"
 
-su -c killall com.google.android.gms.unstable || echo ""
+for i in $(busybox pidof com.google.android.gms.unstable); do
+	echo "- Killing pid $i"
+	kill -9 $i 
+done
