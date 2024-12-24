@@ -468,7 +468,10 @@ static void companion(int fd) {
         xwrite(fd, json.data(), jsonSize * sizeof(uint8_t));
     }
 
-    bool trickyStore = std::filesystem::exists(TS_PATH);
+    std::string ts(TS_PATH);
+    bool trickyStore = std::filesystem::exists(ts) &&
+                       !std::filesystem::exists(ts + "/disable") &&
+                       !std::filesystem::exists(ts + "/remove");
     xwrite(fd, &trickyStore, sizeof(trickyStore));
 
     bool testSignedRom = checkOtaZip();

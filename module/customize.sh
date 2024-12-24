@@ -62,7 +62,6 @@ fi
 
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
-    ui_print "!!! WARNING !!!"
-    ui_print "- You are using custom pif.json (/data/adb/pif.json)"
-    ui_print "- Remove that file if you can't pass attestation test!"
+    ui_print "- Backup custom pif.json"
+    mv -f /data/adb/pif.json /data/adb/pif.json.old
 fi
