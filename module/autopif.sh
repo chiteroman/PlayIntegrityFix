@@ -1,17 +1,6 @@
 #!/bin/sh
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
 
-# functions
-die() { echo "Error: $@!"; exit 1; }
-
-find_busybox() {
-    command -v busybox "$@"
-}
-
-if date -D '%s' -d "$(date '+%s')" 2>&1 | grep -qE "bad date|invalid option"; then
-    find_busybox && date() { $BUSYBOX date "$@"; } || die "date broken"
-fi
-
 download() {
 	if command -v curl > /dev/null 2>&1; then
 		curl --connect-timeout 10 -s "$1"
@@ -20,14 +9,9 @@ download() {
         fi
 }  
 
-if echo -e "A\nB" | grep -q "A.*B"; then
-    find_busybox || die "grep broken"
-    grep() { $BUSYBOX grep "$@"; }
-fi
-
 set_random_beta() {
     if [ "$(echo "$MODEL_LIST" | wc -l)" -ne "$(echo "$PRODUCT_LIST" | wc -l)" ]; then
-        die "MODEL_LIST and PRODUCT_LIST have different lengths."
+        echo "Error: MODEL_LIST and PRODUCT_LIST have different lengths."
     fi
     count=$(echo "$MODEL_LIST" | wc -l)
     rand_index=$(( $$ % count ))
@@ -51,13 +35,22 @@ RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o
 ID="$(grep -m1 -o 'Build:.*' PIXEL_GSI_HTML | cut -d' ' -f2)"
 INCREMENTAL="$(grep -m1 -o "$ID-.*-" PIXEL_GSI_HTML | cut -d- -f2)"
 
-download "https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_GET_HTML || exit 1
-download "https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_BETA_HTML || exit 1
+download "https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_GET_HTML || {
+	echo "download failed!"
+	exit 0
+	}
+download "https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_BETA_HTML || {
+	echo "download failed!"
+	exit 0
+	}
 
 MODEL_LIST="$(grep -A1 'tr id=' PIXEL_BETA_HTML | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')"
 PRODUCT_LIST="$(grep -o 'factory/.*_beta' PIXEL_BETA_HTML | cut -d/ -f2)"
 
-download https://source.android.com/docs/security/bulletin/pixel > PIXEL_SECBULL_HTML|| exit 1
+download https://source.android.com/docs/security/bulletin/pixel > PIXEL_SECBULL_HTML || {
+	echo "download failed!"
+	exit 0
+	}
 
 SECURITY_PATCH="$(grep -A15 "$(grep -m1 -o 'Security patch level:.*' PIXEL_GSI_HTML | cut -d' ' -f4-)" PIXEL_SECBULL_HTML | grep -m1 -B1 '</tr>' | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')"
 
