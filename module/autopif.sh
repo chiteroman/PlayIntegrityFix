@@ -1,26 +1,26 @@
 #!/system/bin/sh
 
-if [ "$USER" != "root" -o "$(whoami 2>/dev/null)" != "root" ]; then
-  echo "autopif: need root permissions";
+if [ "$USER" != "root" -a "$(whoami 2>/dev/null)" != "root" ]; then
+  echo "autopif2: need root permissions";
   exit 1;
 fi;
 
 case "$1" in
-  -h|--help|help) echo "sh autopif.sh [-a]"; exit 0;;
-  -a|--advanced|advanced) ARGS="-a";;
+  -h|--help|help) echo "sh autopif2.sh [-a]"; exit 0;;
+  -a|--advanced|advanced) ARGS="-a"; shift;;
 esac;
 
-echo "Xiaomi.eu pif.json extractor script \
+echo "Pixel Beta pif.json generator script \
   \n  by osm0sis @ xda-developers";
 
 case "$0" in
   *.sh) DIR="$0";;
-  *) DIR="$(lsof -p $$ 2>/dev/null | grep -o '/.*autopif.sh$')";;
+  *) DIR="$(lsof -p $$ 2>/dev/null | grep -o '/.*autopif2.sh$')";;
 esac;
 DIR=$(dirname "$(readlink -f "$DIR")");
 
 item() { echo "\n- $@"; }
-die() { echo "\nError: $@!"; exit 1; }
+die() { echo "\nError: $@, install busybox!"; exit 1; }
 
 find_busybox() {
   [ -n "$BUSYBOX" ] && return 0;
@@ -36,59 +36,90 @@ find_busybox() {
 
 if ! which wget >/dev/null || grep -q "wget-curl" $(which wget); then
   if ! find_busybox; then
-    die "wget not found, install busybox";
+    die "wget not found";
   elif $BUSYBOX ping -c1 -s2 android.com 2>&1 | grep -q "bad address"; then
-    die "wget broken, install busybox";
+    die "wget broken";
   else
     wget() { $BUSYBOX wget "$@"; }
   fi;
 fi;
 
+if date -D '%s' -d "$(date '+%s')" 2>&1 | grep -q "bad date"; then
+  if ! find_busybox; then
+    die "date broken";
+  else
+    date() { $BUSYBOX date "$@"; }
+  fi;
+fi;
+
 if [ "$DIR" = /data/adb/modules/playintegrityfix ]; then
-  DIR=$DIR/autopif;
+  DIR=$DIR/autopif2;
   mkdir -p $DIR;
 fi;
 cd "$DIR";
 
-if [ ! -f apktool_2.0.3-dexed.jar ]; then
-  item "Downloading Apktool ...";
-  wget --no-check-certificate -O apktool_2.0.3-dexed.jar https://github.com/osm0sis/APK-Patcher/raw/master/tools/apktool_2.0.3-dexed.jar 2>&1 || exit 1;
+item "Crawling Android Developers for latest Pixel Beta ...";
+wget -q -O PIXEL_GSI_HTML --no-check-certificate https://developer.android.com/topic/generic-system-image/releases 2>&1 || exit 1;
+grep -m1 -o 'li>.*(Beta)' PIXEL_GSI_HTML | cut -d\> -f2;
+
+BETA_REL_DATE="$(date -D '%B %e, %Y' -d "$(grep -m1 -o 'Date:.*' PIXEL_GSI_HTML | cut -d\  -f2-4)" '+%Y-%m-%d')";
+BETA_EXP_DATE="$(date -D '%s' -d "$(($(date -D '%Y-%m-%d' -d "$BETA_REL_DATE" '+%s') + 60 * 60 * 24 * 7 * 6))" '+%Y-%m-%d')";
+echo "Beta Released: $BETA_REL_DATE \
+  \nEstimated Expiry: $BETA_EXP_DATE";
+
+RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o '/versions/.*' | cut -d\/ -f3)";
+ID="$(grep -m1 -o 'Build:.*' PIXEL_GSI_HTML | cut -d\  -f2)";
+INCREMENTAL="$(grep -m1 -o "$ID-.*-" PIXEL_GSI_HTML | cut -d- -f2)";
+
+wget -q -O PIXEL_GET_HTML --no-check-certificate https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2) 2>&1 || exit 1;
+wget -q -O PIXEL_BETA_HTML --no-check-certificate https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2) 2>&1 || exit 1;
+
+MODEL_LIST="$(grep -A1 'tr id=' PIXEL_BETA_HTML | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')";
+PRODUCT_LIST="$(grep -o 'factory/.*_beta' PIXEL_BETA_HTML | cut -d\/ -f2)";
+
+wget -q -O PIXEL_SECBULL_HTML --no-check-certificate https://source.android.com/docs/security/bulletin/pixel 2>&1 || exit 1;
+
+SECURITY_PATCH="$(grep -A15 "$(grep -m1 -o 'Security patch level:.*' PIXEL_GSI_HTML | cut -d\  -f4-)" PIXEL_SECBULL_HTML | grep -m1 -B1 '</tr>' | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')";
+
+case "$1" in
+  -m)
+    DEVICE="$(getprop ro.product.device)";
+    case "$PRODUCT_LIST" in
+      *${DEVICE}_beta*)
+        MODEL="$(getprop ro.product.model)";
+        PRODUCT="${DEVICE}_beta";
+      ;;
+    esac;
+  ;;
+esac;
+item "Selecting Pixel Beta device ...";
+if [ -z "$PRODUCT" ]; then
+  set_random_beta() {
+    local list_count="$(echo "$MODEL_LIST" | wc -l)";
+    local list_rand="$((RANDOM % $list_count + 1))";
+    local IFS=$'\n';
+    set -- $MODEL_LIST;
+    MODEL="$(eval echo \${$list_rand})";
+    set -- $PRODUCT_LIST;
+    PRODUCT="$(eval echo \${$list_rand})";
+    DEVICE="$(echo "$PRODUCT" | sed 's/_beta//')";
+  }
+  set_random_beta;
 fi;
+echo "$MODEL ($PRODUCT)";
 
-item "Finding latest APK from RSS feed ...";
-APKURL=$(wget -q -O - --no-check-certificate https://sourceforge.net/projects/xiaomi-eu-multilang-miui-roms/rss?path=/xiaomi.eu/Xiaomi.eu-app | grep -o '<link>.*' | head -n 2 | tail -n 1 | sed 's;<link>\(.*\)</link>;\1;g');
-APKNAME=$(echo $APKURL | sed 's;.*/\(.*\)/download;\1;g');
-echo "$APKNAME";
-
-if [ ! -f $APKNAME ]; then
-  item "Downloading $APKNAME ...";
-  wget --no-check-certificate -O $APKNAME $APKURL 2>&1 || exit 1;
-fi;
-
-OUT=$(basename $APKNAME .apk);
-if [ ! -d $OUT ]; then
-  item "Extracting APK files with Apktool ...";
-  DALVIKVM=dalvikvm;
-  if echo "$PREFIX" | grep -q "termux"; then
-    if [ "$TERMUX_VERSION" ]; then
-      if grep -q "apex" $PREFIX/bin/dalvikvm; then
-        DALVIKVM=$PREFIX/bin/dalvikvm;
-      else
-        die 'Outdated Termux packages, run "pkg upgrade" from a user prompt';
-      fi;
-    else
-      die "Play Store Termux not supported, use GitHub/F-Droid Termux";
-    fi;
-  fi;
-  $DALVIKVM -Xnoimage-dex2oat -cp apktool_2.0.3-dexed.jar brut.apktool.Main d -f --no-src -p $OUT -o $OUT $APKNAME || exit 1;
-  [ -f $OUT/res/xml/inject_fields.xml ] || die "inject_fields.xml not found";
-fi;
-
-item "Converting inject_fields.xml to pif.json ...";
-(echo '{';
-grep -o '<field.*' $OUT/res/xml/inject_fields.xml | sed 's;.*name=\(".*"\) type.* value=\(".*"\).*;  \1: \2,;g';
-echo '  "DEVICE_INITIAL_SDK_INT": "32",' ) | sed '$s/,/\n}/' | tee pif.json;
-grep -q "FINGERPRINT" pif.json || die "Failed to extract information from inject_fields.xml";
+item "Dumping values to minimal pif.json ...";
+cat <<EOF | tee pif.json;
+{
+  "MANUFACTURER": "Google",
+  "MODEL": "$MODEL",
+  "FINGERPRINT": "google/$PRODUCT/$DEVICE:$RELEASE/$ID/$INCREMENTAL:user/release-keys",
+  "PRODUCT": "$PRODUCT",
+  "DEVICE": "$DEVICE",
+  "SECURITY_PATCH": "$SECURITY_PATCH",
+  "DEVICE_INITIAL_SDK_INT": "32"
+}
+EOF
 
 for MIGRATE in migrate.sh /data/adb/modules/playintegrityfix/migrate.sh; do
   [ -f "$MIGRATE" ] && break; 
@@ -110,10 +141,11 @@ if [ -f "$MIGRATE" ]; then
     done;
   fi;
   grep -q '//"\*.security_patch"' $OLDJSON && sed -i 's;"\*.security_patch";//"\*.security_patch";' custom.pif.json;
+  sed -i "s;};\n  // Beta Released: $BETA_REL_DATE\n  // Estimated Expiry: $BETA_EXP_DATE\n};" custom.pif.json;
   cat custom.pif.json;
 fi;
 
-if [ "$DIR" = /data/adb/modules/playintegrityfix/autopif ]; then
+if [ "$DIR" = /data/adb/modules/playintegrityfix/autopif2 ]; then
   if [ -f /data/adb/modules/playintegrityfix/migrate.sh ]; then
     NEWNAME="custom.pif.json";
   else
