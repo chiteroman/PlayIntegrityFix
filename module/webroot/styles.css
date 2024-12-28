@@ -1,0 +1,27 @@
+@font-face {
+    font-family: 'Mono';
+    src: url('assets/RobotoMono-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+    font-family: 'Mono';
+    padding-top: var(--window-inset-top);
+    padding-bottom: var(--window-inset-bottom);
+}
+
+.output {
+    font-size: 14px;
+    left: 10px;
+    width: calc(100vw - 20px);
+    white-space: nowrap;
+    word-break: break-all;
+}
+
+@media (prefers-color-scheme: dark) {
+	body {
+		background-color: #121212;
+		color: #fff;
+	}
+}
