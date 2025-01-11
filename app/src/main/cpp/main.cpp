@@ -449,10 +449,15 @@ static void companion(int fd) {
 
     std::vector<uint8_t> dex, json;
 
-    dex = readFile(DEX_PATH);
+    if (std::filesystem::exists(DEX_PATH)) {
+        dex = readFile(DEX_PATH);
+    }
 
-    json = readFile(PIF_JSON);
-    if (json.empty()) json = readFile(PIF_JSON_DEFAULT);
+    if (std::filesystem::exists(PIF_JSON)) {
+        json = readFile(PIF_JSON);
+    } else if (std::filesystem::exists(PIF_JSON_DEFAULT)) {
+        json = readFile(PIF_JSON_DEFAULT);
+    }
 
     int dexSize = static_cast<int>(dex.size());
     int jsonSize = static_cast<int>(json.size());
