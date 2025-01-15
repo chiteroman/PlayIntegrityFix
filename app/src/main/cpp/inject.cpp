@@ -241,7 +241,7 @@ void injectDex() {
 
 extern "C" {
 [[gnu::visibility("default"), maybe_unused]]
-void init(const char *dir, JavaVM *jvm) {
+void init(const char *dir, JavaVM *jvm, jint jni_version) {
 
     if (dir) {
         LOGD("[INJECT] GMS dir: %s", dir);
@@ -251,18 +251,18 @@ void init(const char *dir, JavaVM *jvm) {
     }
 
     if (jvm) {
-        auto result = jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
-        LOGD("[INJECT] JVM: %d", result);
-        if (result == JNI_EDETACHED) {
-            result = jvm->AttachCurrentThread(&env, nullptr);
-            LOGD("[INJECT] (JNI_EDETACHED) JVM: %d", result);
+        auto result = jvm->GetEnv(reinterpret_cast<void **>(&env), jni_version);
+        if (result != JNI_OK) {
+            LOGE("[INJECT] GetEnv error: %d", result);
+            return;
         }
     } else {
         LOGE("[INJECT] jvm is null!");
+        return;
     }
 
     if (env) {
-        LOGD("[INJECT] JNIEnv: %d", env->GetVersion());
+        LOGD("[INJECT] JNIEnv version: %x", env->GetVersion());
     } else {
         LOGE("[INJECT] env is null!");
         return;

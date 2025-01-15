@@ -25,8 +25,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18201
-        versionName = "v18.2.1-EXPERIMENTAL"
+        versionCode = 18300
+        versionName = "v18.3"
         multiDexEnabled = false
 
         externalNativeBuild {
@@ -37,8 +37,19 @@ android {
                 )
 
                 arguments(
-                    "-DCMAKE_BUILD_TYPE=MinSizeRel",
-                    "-DANDROID_STL=none"
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DANDROID_STL=none",
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+                    "-DANDROID_ALLOW_UNDEFINED_SYMBOLS=ON",
+                    "-DCMAKE_CXX_STANDARD=23",
+                    "-DCMAKE_C_STANDARD=23",
+                    "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON",
+                    "-DCMAKE_VISIBILITY_INLINES_HIDDEN=ON",
+                    "-DCMAKE_CXX_VISIBILITY_PRESET=hidden",
+                    "-DCMAKE_C_VISIBILITY_PRESET=hidden",
+                    "-DCMAKE_ANDROID_EXCEPTIONS=OFF",
+                    "-DCMAKE_ANDROID_RTTI=OFF",
+                    "-DANDROID_CPP_FEATURES='no-rtti no-exceptions'"
                 )
 
                 cFlags(
