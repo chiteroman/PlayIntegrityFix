@@ -458,7 +458,7 @@ static std::vector<uint8_t> readFile(const char *path) {
 }
 
 static bool checkOtaZip() {
-    std::array<char, 128> buffer{};
+    std::array<char, 256> buffer{};
     std::string result;
     bool found = false;
 
