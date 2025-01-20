@@ -3,6 +3,10 @@
 #include <unistd.h>
 #include "zygisk.hpp"
 #include "dobby.h"
+
+#define JSON_NOEXCEPTION 1
+#define JSON_NO_IO 1
+
 #include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
@@ -10,11 +14,11 @@
 
 #define DEX_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
-#define PIF_JSON "/data/adb/pif.json"
-
-#define PIF_JSON_DEFAULT "/data/adb/modules/playintegrityfix/pif.json"
-
 #define TS_PATH "/data/adb/modules/tricky_store"
+
+#define DEFAULT_JSON "/data/adb/modules/playintegrityfix/pif.json"
+#define CUSTOM_JSON_FORK "/data/adb/modules/playintegrityfix/custom.pif.json"
+#define CUSTOM_JSON "/data/adb/pif.json"
 
 static inline ssize_t xread(int fd, void *buffer, size_t count) {
     auto *buf = static_cast<char *>(buffer);
@@ -186,33 +190,33 @@ public:
 
         int fd = api->connectCompanion();
 
-        int dexSize = 0, jsonSize = 0;
+        size_t dexSize = 0, jsonSize = 0;
         std::string jsonStr;
 
-        xread(fd, &dexSize, sizeof(dexSize));
-        xread(fd, &jsonSize, sizeof(jsonSize));
+        xread(fd, &dexSize, sizeof(size_t));
+        xread(fd, &jsonSize, sizeof(size_t));
 
         if (dexSize > 0) {
             dexVector.resize(dexSize);
-            xread(fd, dexVector.data(), dexSize * sizeof(uint8_t));
+            xread(fd, dexVector.data(), dexSize);
         }
 
         if (jsonSize > 0) {
             jsonStr.resize(jsonSize);
-            xread(fd, jsonStr.data(), jsonSize * sizeof(uint8_t));
+            xread(fd, jsonStr.data(), jsonSize);
             json = nlohmann::json::parse(jsonStr, nullptr, false, true);
         }
 
         bool trickyStore = false;
-        xread(fd, &trickyStore, sizeof(trickyStore));
+        xread(fd, &trickyStore, sizeof(bool));
 
         bool testSignedRom = false;
-        xread(fd, &testSignedRom, sizeof(testSignedRom));
+        xread(fd, &testSignedRom, sizeof(bool));
 
         close(fd);
 
-        LOGD("Dex file size: %d", dexSize);
-        LOGD("Json file size: %d", jsonSize);
+        LOGD("Dex file size: %ld", dexSize);
+        LOGD("Json file size: %ld", jsonSize);
 
         parseJSON();
 
@@ -259,7 +263,7 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    std::vector<uint8_t> dexVector;
+    std::vector<char> dexVector;
     nlohmann::json json;
     bool spoofProps = true;
     bool spoofProvider = true;
@@ -441,15 +445,16 @@ private:
     }
 };
 
-static std::vector<uint8_t> readFile(const char *path) {
+static std::vector<char> readFile(const char *path) {
     FILE *file = fopen(path, "rb");
 
     if (!file) return {};
 
-    int size = static_cast<int>(std::filesystem::file_size(path));
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
 
-    std::vector<uint8_t> vector(size);
-
+    std::vector<char> vector(size);
     fread(vector.data(), 1, size, file);
 
     fclose(file);
@@ -479,40 +484,42 @@ static bool checkOtaZip() {
 
 static void companion(int fd) {
 
-    std::vector<uint8_t> dex, json;
+    std::vector<char> dex, json;
 
     if (std::filesystem::exists(DEX_PATH)) {
         dex = readFile(DEX_PATH);
     }
 
-    if (std::filesystem::exists(PIF_JSON)) {
-        json = readFile(PIF_JSON);
-    } else if (std::filesystem::exists(PIF_JSON_DEFAULT)) {
-        json = readFile(PIF_JSON_DEFAULT);
+    if (std::filesystem::exists(CUSTOM_JSON)) {
+        json = readFile(CUSTOM_JSON);
+    } else if (std::filesystem::exists(CUSTOM_JSON_FORK)) {
+        json = readFile(CUSTOM_JSON_FORK);
+    } else if (std::filesystem::exists(DEFAULT_JSON)) {
+        json = readFile(DEFAULT_JSON);
     }
 
-    int dexSize = static_cast<int>(dex.size());
-    int jsonSize = static_cast<int>(json.size());
+    size_t dexSize = dex.size();
+    size_t jsonSize = json.size();
 
-    xwrite(fd, &dexSize, sizeof(dexSize));
-    xwrite(fd, &jsonSize, sizeof(jsonSize));
+    xwrite(fd, &dexSize, sizeof(size_t));
+    xwrite(fd, &jsonSize, sizeof(size_t));
 
     if (dexSize > 0) {
-        xwrite(fd, dex.data(), dexSize * sizeof(uint8_t));
+        xwrite(fd, dex.data(), dexSize);
     }
 
     if (jsonSize > 0) {
-        xwrite(fd, json.data(), jsonSize * sizeof(uint8_t));
+        xwrite(fd, json.data(), jsonSize);
     }
 
     std::string ts(TS_PATH);
     bool trickyStore = std::filesystem::exists(ts) &&
                        !std::filesystem::exists(ts + "/disable") &&
                        !std::filesystem::exists(ts + "/remove");
-    xwrite(fd, &trickyStore, sizeof(trickyStore));
+    xwrite(fd, &trickyStore, sizeof(bool));
 
     bool testSignedRom = checkOtaZip();
-    xwrite(fd, &testSignedRom, sizeof(testSignedRom));
+    xwrite(fd, &testSignedRom, sizeof(bool));
 }
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)
