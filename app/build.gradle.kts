@@ -31,6 +31,11 @@ android {
 
         externalNativeBuild {
             cmake {
+                abiFilters(
+                    "arm64-v8a",
+                    "armeabi-v7a"
+                )
+
                 arguments(
                     "-DCMAKE_BUILD_TYPE=MinSizeRel",
                     "-DANDROID_STL=none"
