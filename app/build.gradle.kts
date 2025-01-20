@@ -25,17 +25,12 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18201
-        versionName = "v18.2.1-EXPERIMENTAL"
+        versionCode = 18200
+        versionName = "v18.2"
         multiDexEnabled = false
 
         externalNativeBuild {
             cmake {
-                abiFilters(
-                    "arm64-v8a",
-                    "armeabi-v7a"
-                )
-
                 arguments(
                     "-DCMAKE_BUILD_TYPE=MinSizeRel",
                     "-DANDROID_STL=none"
@@ -114,20 +109,11 @@ tasks.register("copyFiles") {
 
         dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 
-        soDir.walk()
-            .filter { it.isFile }
-            .forEach { file ->
-                val abiFolder = file.parentFile.name
-                var destination = File("")
-                if (file.name == "libzygisk.so") {
-                    destination = moduleFolder.resolve("zygisk/$abiFolder.so")
-                } else if (file.name == "libinject.so") {
-                    destination = moduleFolder.resolve("inject/$abiFolder.so")
-                }
-                if (!destination.name.isNullOrEmpty()) {
-                    file.copyTo(destination, overwrite = true)
-                }
-            }
+        soDir.walk().filter { it.isFile && it.extension == "so" }.forEach { soFile ->
+            val abiFolder = soFile.parentFile.name
+            val destination = moduleFolder.resolve("zygisk/$abiFolder.so")
+            soFile.copyTo(destination, overwrite = true)
+        }
     }
 }
 
