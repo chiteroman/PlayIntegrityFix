@@ -263,7 +263,7 @@ public:
 
         dlerror();
 
-        typedef void (*init_t)(const char *, JavaVM *, jint);
+        typedef void (*init_t)(const char *, JavaVM *);
 
         auto init_func = reinterpret_cast<init_t>(dlsym(handle, "init"));
         const char *error = dlerror();
@@ -281,7 +281,7 @@ public:
             return;
         }
 
-        init_func(gmsDir.c_str(), jvm, env->GetVersion());
+        init_func(gmsDir.c_str(), jvm);
     }
 
     void preServerSpecialize(ServerSpecializeArgs *args) override {
