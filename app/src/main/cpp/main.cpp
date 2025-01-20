@@ -16,29 +16,61 @@
 
 #define TS_PATH "/data/adb/modules/tricky_store"
 
-static ssize_t xread(int fd, void *buffer, size_t count) {
+static inline ssize_t xread(int fd, void *buffer, size_t count) {
+    auto *buf = static_cast<char *>(buffer);
     ssize_t total = 0;
-    char *buf = (char *) buffer;
+
     while (count > 0) {
-        ssize_t ret = TEMP_FAILURE_RETRY(read(fd, buf, count));
-        if (ret < 0) return -1;
+        ssize_t ret = read(fd, buf, count);
+
+        if (ret < 0) {
+            // Retry if interrupted
+            if (errno == EINTR) {
+                continue;
+            }
+
+            return -1;
+        }
+
+        // If 0, we've hit EOF (read no more data)
+        if (ret == 0) {
+            break;
+        }
+
         buf += ret;
         total += ret;
         count -= ret;
     }
+
     return total;
 }
 
-static ssize_t xwrite(int fd, const void *buffer, size_t count) {
+static inline ssize_t xwrite(int fd, const void *buffer, size_t count) {
+    auto *buf = static_cast<const char *>(buffer);
     ssize_t total = 0;
-    char *buf = (char *) buffer;
+
     while (count > 0) {
-        ssize_t ret = TEMP_FAILURE_RETRY(write(fd, buf, count));
-        if (ret < 0) return -1;
+        ssize_t ret = write(fd, buf, count);
+
+        if (ret < 0) {
+            // Retry if interrupted
+            if (errno == EINTR) {
+                continue;
+            }
+
+            return -1;
+        }
+
+        // Technically, write returning 0 is unusual (e.g., disk full); handle it if needed
+        if (ret == 0) {
+            break;
+        }
+
         buf += ret;
         total += ret;
         count -= ret;
     }
+
     return total;
 }
 
