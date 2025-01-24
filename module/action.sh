@@ -50,12 +50,18 @@ download https://developer.android.com/topic/generic-system-image/releases > PIX
 grep -m1 -o 'li>.*(Beta)' PIXEL_GSI_HTML | cut -d\> -f2
 grep -m1 -o 'Date:.*' PIXEL_GSI_HTML
 
-RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o '/versions/.*' | cut -d/ -f3)"
+current_timestamp=$(date +%s)
+threshold_timestamp=1740312000 # Baklava still not name as 16. TODO: Need to know what is the actually time of changeing the name of release.
+if [ "$current_timestamp" -lt "$threshold_timestamp" ]; then
+    RELEASE="Baklava"
+else
+    RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o '/versions/.*' | cut -d/ -f3)"
+fi
 ID="$(grep -m1 -o 'Build:.*' PIXEL_GSI_HTML | cut -d' ' -f2)"
 INCREMENTAL="$(grep -m1 -o "$ID-.*-" PIXEL_GSI_HTML | cut -d- -f2)"
 
 download "https://developer.android.com$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_GET_HTML || download_fail
-download "https://developer.android.com$(grep -m1 'Factory images for Google Pixel' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_BETA_HTML || download_fail
+download "https://developer.android.com$(grep -m1 'Pixel downloads page' PIXEL_GET_HTML | grep -o 'href.*' | cut -d\" -f2)" > PIXEL_BETA_HTML || download_fail
 
 MODEL_LIST="$(grep -A1 'tr id=' PIXEL_BETA_HTML | grep 'td' | sed 's;.*<td>\(.*\)</td>;\1;')"
 PRODUCT_LIST="$(grep -o 'factory/.*_beta' PIXEL_BETA_HTML | cut -d/ -f2)"
