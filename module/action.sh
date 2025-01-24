@@ -50,7 +50,13 @@ download https://developer.android.com/topic/generic-system-image/releases > PIX
 grep -m1 -o 'li>.*(Beta)' PIXEL_GSI_HTML | cut -d\> -f2
 grep -m1 -o 'Date:.*' PIXEL_GSI_HTML
 
-RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o '/versions/.*' | cut -d/ -f3)"
+current_timestamp=$(date +%s)
+threshold_timestamp=1740312000 # Baklava still not name as 16. TODO: Need to know what is the actually time of changeing the name of release.
+if [ "$current_timestamp" -lt "$threshold_timestamp" ]; then
+    RELEASE="Baklava"
+else
+    RELEASE="$(grep -m1 'corresponding Google Pixel builds' PIXEL_GSI_HTML | grep -o '/versions/.*' | cut -d/ -f3)"
+fi
 ID="$(grep -m1 -o 'Build:.*' PIXEL_GSI_HTML | cut -d' ' -f2)"
 INCREMENTAL="$(grep -m1 -o "$ID-.*-" PIXEL_GSI_HTML | cut -d- -f2)"
 
