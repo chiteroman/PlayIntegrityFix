@@ -203,7 +203,8 @@ public:
 
         if (jsonSize > 0) {
             jsonStr.resize(jsonSize);
-            xread(fd, jsonStr.data(), jsonSize);
+            jsonSize = xread(fd, jsonStr.data(), jsonSize);
+            jsonStr[jsonSize] = '\0';
             json = nlohmann::json::parse(jsonStr, nullptr, false, true);
         }
 
@@ -233,7 +234,7 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty()) return;
+        if (dexVector.empty() || json.empty()) return;
 
         UpdateBuildFields();
 
