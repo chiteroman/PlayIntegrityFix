@@ -1,20 +1,17 @@
 Telegram channel:
 https://t.me/playintegrityfix
 
-Device verdict should pass by default.
-If not, try removing /data/adb/pif.json file.
-
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-If you are using TrickyStore and you have a valid keybox, but Strong
-isn't passing, maybe you should change the ROM.
-Stock ROMs gives the best results.
+# IMPORTANT
 
-# v18.4
+Google implemented new checks, now, new Device verdict is like old Strong.
 
-- Revert changes in v18.3
+If you download [Play Integrity API Checker](https://play.google.com/store/apps/details?id=gr.nikolasspyr.integritycheck) you can check these new verdicts.
 
-It seems that injecting a lib in the unstable process (GMS) doesn't work on some devices :(
+If you want to pass new Device verdict you must spoof a valid certificate chain. You can spoof it using [TrickyStore](https://github.com/5ec1cff/TrickyStore) module along PIF (recommended).
 
-I tried to optimize the code to avoid battery drain.
+# v18.5
+
+- Fix Device verdict not passing on some devices.
