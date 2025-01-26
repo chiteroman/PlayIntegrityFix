@@ -25,8 +25,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18500
-        versionName = "v18.5"
+        versionCode = 1
+        versionName = "v1-inject"
         multiDexEnabled = false
 
         externalNativeBuild {
@@ -114,9 +114,14 @@ tasks.register("copyFiles") {
 
         dexFile.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 
-        soDir.walk().filter { it.isFile && it.extension == "so" }.forEach { soFile ->
+        soDir.walk().filter { it.isFile }.forEach { soFile ->
             val abiFolder = soFile.parentFile.name
-            val destination = moduleFolder.resolve("zygisk/$abiFolder.so")
+            var destination = File("")
+            if (soFile.name == "libinject.so") {
+                destination = moduleFolder.resolve("inject/$abiFolder.so")
+            } else if (soFile.name == "libzygisk.so") {
+                destination = moduleFolder.resolve("zygisk/$abiFolder.so")
+            }
             soFile.copyTo(destination, overwrite = true)
         }
     }
