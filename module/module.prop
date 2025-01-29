@@ -4,4 +4,4 @@ version=v1-inject
 versionCode=1
 author=chiteroman
 description=Universal modular fix for Play Integrity (and SafetyNet) on devices running Android 8-15
-updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json
+updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/refs/heads/inject/update.json
