@@ -173,8 +173,14 @@ static void playIntegrityApiHandleNewChecks() {
         if (len > 0 && line[len - 1] == '\n') {
             line[len - 1] = '\0';
         }
-        if (strcmp(line, "android") == 0) android_found = true;
-        else if (strcmp(line, "com.android.vending") == 0) vending_found = true;
+
+        if (strcmp(line, "android") == 0 || strcmp(line, "android!") == 0 || strcmp(line, "android?") == 0) {
+            android_found = true;
+        }
+
+        if (strcmp(line, "com.android.vending") == 0 || strcmp(line, "com.android.vending!") == 0 || strcmp(line, "com.android.vending?") == 0) {
+            vending_found = true;
+        }
     }
 
     fseek(file, 0, SEEK_END);
