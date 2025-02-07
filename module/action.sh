@@ -48,7 +48,6 @@ set_random_beta() {
 	rand_index=$(( $$ % count ))
 	MODEL=$(echo "$MODEL_LIST" | sed -n "$((rand_index + 1))p")
 	PRODUCT=$(echo "$PRODUCT_LIST" | sed -n "$((rand_index + 1))p")
-	DEVICE=$(echo "$PRODUCT" | sed 's/_beta//')
 }
 
 # lets try to use tmpfs for processing
@@ -87,9 +86,9 @@ echo "- Selecting Pixel Beta device ..."
 echo "$MODEL ($PRODUCT)"
 
 # Get device fingerprint and security patch from OTA metadata
-(ulimit -f 2; download "$(echo "$OTA_LIST" | grep "$PRODUCT")" PIXEL_ZIP_METADATA)
-FINGERPRINT="$(grep -am1 'post-build=' PIXEL_ZIP_METADATA | cut -d= -f2)"
-SECURITY_PATCH="$(grep -am1 'security-patch-level=' PIXEL_ZIP_METADATA | cut -d= -f2)"
+(ulimit -f 2; download "$(echo "$OTA_LIST" | grep "$PRODUCT")" PIXEL_ZIP_METADATA) >/dev/null 2>&1
+FINGERPRINT="$(strings PIXEL_ZIP_METADATA | grep -am1 'post-build=' | cut -d= -f2)"
+SECURITY_PATCH="$(strings PIXEL_ZIP_METADATA | grep -am1 'security-patch-level=' | cut -d= -f2)"
 
 # Get device SDK version
 sdk_version="$(getprop ro.build.version.sdk)"
