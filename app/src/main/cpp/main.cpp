@@ -20,61 +20,29 @@
 #define CUSTOM_JSON_FORK "/data/adb/modules/playintegrityfix/custom.pif.json"
 #define CUSTOM_JSON "/data/adb/pif.json"
 
-static inline ssize_t xread(int fd, void *buffer, size_t count) {
-    auto *buf = static_cast<char *>(buffer);
+static ssize_t xread(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
-
+    char *buf = static_cast<char *>(buffer);
     while (count > 0) {
-        ssize_t ret = read(fd, buf, count);
-
-        if (ret < 0) {
-            // Retry if interrupted
-            if (errno == EINTR) {
-                continue;
-            }
-
-            return -1;
-        }
-
-        // If 0, we've hit EOF (read no more data)
-        if (ret == 0) {
-            break;
-        }
-
+        ssize_t ret = TEMP_FAILURE_RETRY(read(fd, buf, count));
+        if (ret < 0) return -1;
         buf += ret;
         total += ret;
         count -= ret;
     }
-
     return total;
 }
 
-static inline ssize_t xwrite(int fd, const void *buffer, size_t count) {
-    auto *buf = static_cast<const char *>(buffer);
+static ssize_t xwrite(int fd, const void *buffer, size_t count) {
     ssize_t total = 0;
-
+    char *buf = (char *) buffer;
     while (count > 0) {
-        ssize_t ret = write(fd, buf, count);
-
-        if (ret < 0) {
-            // Retry if interrupted
-            if (errno == EINTR) {
-                continue;
-            }
-
-            return -1;
-        }
-
-        // Technically, write returning 0 is unusual (e.g., disk full); handle it if needed
-        if (ret == 0) {
-            break;
-        }
-
+        ssize_t ret = TEMP_FAILURE_RETRY(write(fd, buf, count));
+        if (ret < 0) return -1;
         buf += ret;
         total += ret;
         count -= ret;
     }
-
     return total;
 }
 
