@@ -8,6 +8,14 @@ echo "[+] PlayIntegrityFix $version"
 echo "[+] $(basename "$0")"
 printf "\n\n"
 
+sleep_pause() {
+	# APatch and KernelSU needs this
+	# but not KSU_NEXT, MMRL
+	if [ -z "$MMRL" ] && [ -z "$KSU_NEXT" ] && { [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; }; then
+		sleep 5
+	fi
+}
+
 download_fail() {
 	dl_domain=$(echo "$1" | awk -F[/:] '{print $4}')
 	echo "$1" | grep -q "\.zip$" && return
@@ -30,13 +38,6 @@ download() { busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2" || down
 if command -v curl > /dev/null 2>&1; then
 	download() { curl --connect-timeout 10 -s "$1" > "$2" || download_fail "$1"; }
 fi
-
-sleep_pause() {
-	# APatch and KernelSU needs this
-	if [ -z "$MMRL" ] && { [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; }; then
-		sleep 2
-	fi
-}
 
 set_random_beta() {
 	if [ "$(echo "$MODEL_LIST" | wc -l)" -ne "$(echo "$PRODUCT_LIST" | wc -l)" ]; then
