@@ -55,3 +55,12 @@ if [ -n "$(resetprop persist.sys.pixelprops.pi)" ]; then
     resetprop -n -p persist.sys.pixelprops.gapps false
     resetprop -n -p persist.sys.pixelprops.gms false
 fi
+
+# LeafOS "gmscompat: Dynamically spoof props for GMS"
+# https://review.leafos.org/c/LeafOS-Project/android_frameworks_base/+/4416
+# https://review.leafos.org/c/LeafOS-Project/android_frameworks_base/+/4417/5
+if [ -f /data/system/gms_certified_props.json ] && [ ! "$(resetprop persist.sys.spoof.gms)" = "false" ]; then
+	resetprop persist.sys.spoof.gms false
+fi
+
+
