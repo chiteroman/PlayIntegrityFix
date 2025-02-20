@@ -69,10 +69,3 @@ fi
 # give exec perm to action.sh
 chmod +x "$MODPATH/action.sh"
 
-# action.sh, ap 10927, ksu 11981
-if { [ "$KSU" = "true" ] && [ "$KSU_VER_CODE" -ge 11981 ]; } || 
-	{ [ "$APATCH" = "true" ] && [ "$APATCH_VER_CODE" -ge 10927 ]; }; then
-	# we dont need the webui workaround
-	# since manager has action
-	rm -rf "$MODPATH/webroot"
-fi
