@@ -4,14 +4,14 @@ https://t.me/playintegrityfix
 Donations:
 https://www.paypal.com/paypalme/chiteroman
 
-# IMPORTANT
+# Info
 
-Google implemented new checks, now, new Device verdict is like old Strong.
+Should pass Device verdicts (legacy and new) by default without spoofing a valid certificate chain.
 
-If you download [Play Integrity API Checker](https://play.google.com/store/apps/details?id=gr.nikolasspyr.integritycheck) you can check these new verdicts.
+If you want to pass Strong verdicts you must use [TrickyStore](https://github.com/5ec1cff/TrickyStore) + valid and not revoked keybox signed by valid Google private key (good luck finding one).
 
-If you want to pass new Device verdict you must spoof a valid certificate chain. You can spoof it using [TrickyStore](https://github.com/5ec1cff/TrickyStore) module along PIF (recommended).
+# v18.6
 
-# v18.5
-
-- Fix Device verdict not passing on some devices.
+- Update fingerprint.
+- Update autopif script (action script).
+- Bypass new checks.
