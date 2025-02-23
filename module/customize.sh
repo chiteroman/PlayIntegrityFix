@@ -60,6 +60,12 @@ if [ -d "/data/adb/modules/MagiskHidePropsConf" ]; then
     ui_print "! WARNING, MagiskHidePropsConf module may cause issues with PIF."
 fi
 
+# Preserve previous setting
+spoofVending="$(grep -oE '"spoofVendingSdk": [01]' "/data/adb/modules/playintegrityfix/pif.json" | cut -d' ' -f2)"
+if [ -n "$spoofVending" ] && [ "$spoofVending" -eq 1 ]; then
+    sed -i 's/"spoofVendingSdk": 0/"spoofVendingSdk": 1/' "$MODPATH/pif.json"
+fi
+
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
     ui_print "- Backup custom pif.json"
