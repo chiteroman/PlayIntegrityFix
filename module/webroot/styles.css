@@ -11,21 +11,23 @@ body {
     padding-bottom: var(--window-inset-bottom);
 }
 
-.header {
-    user-select: none;
-}
-
 .content {
     padding-bottom: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    height: 90vh;
     gap: 15px;
+}
+
+.header {
+    user-select: none;
 }
 
 .button-box {
     width: calc(85vw + 30px);
     max-width: 800px;
+    flex-shrink: 0;
     background-color: #fff;
     border: none;
     border-radius: 15px;
@@ -118,7 +120,7 @@ input:checked+.slider:before {
 .output-terminal {
     width: calc(85vw + 30px);
     max-width: 800px;
-    height: 600px;
+    flex-grow: 1;
     background-color: #fff;
     box-sizing: border-box;
     border-radius: 15px;
