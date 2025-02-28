@@ -5,8 +5,8 @@ plugins {
 android {
     namespace = "es.chiteroman.playintegrityfix"
     compileSdk = 35
-    buildToolsVersion = "35.0.0"
-    ndkVersion = "27.2.12479018"
+    buildToolsVersion = "35.0.1"
+    ndkVersion = "28.0.13004108"
 
     buildFeatures {
         prefab = true
