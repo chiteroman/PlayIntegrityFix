@@ -113,9 +113,9 @@ static bool doHook() {
 
 class PlayIntegrityFix : public zygisk::ModuleBase {
 public:
-    void onLoad(zygisk::Api *api, JNIEnv *env) override {
-        this->api = api;
-        this->env = env;
+    void onLoad(zygisk::Api *_api, JNIEnv *_env) override {
+        this->api = _api;
+        this->env = _env;
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
@@ -199,8 +199,8 @@ public:
 
         close(fd);
 
-        LOGD("Dex file size: %ld", dexSize);
-        LOGD("Json file size: %ld", jsonSize);
+        LOGD("Dex file size: %zu", dexSize);
+        LOGD("Json file size: %zu", jsonSize);
 
         parseJSON();
 
