@@ -32,7 +32,7 @@ After requesting an attestation, you should get this result:
 
 - MEETS_BASIC_INTEGRITY   ✅
 - MEETS_DEVICE_INTEGRITY  ✅
-- MEETS_STRONG_INTEGRITY  ❌
+- MEETS_STRONG_INTEGRITY  ✅
 - MEETS_VIRTUAL_INTEGRITY ❌ (this is for emulators only)
 
 You can know more about verdicts in this post: https://xdaforums.com/t/info-play-integrity-api-replacement-for-safetynet.4479337/
@@ -43,7 +43,9 @@ And in SafetyNet you should get this:
 - ctsProfileMatch: true
 - evaluationType:  BASIC
 
-NOTE: Strong verdict is impossible to pass on unlocked bootloader devices, there are few devices and "exploits" which will allow you to pass it, but, in normal conditions, this verdict will be green only if you are using stock ROM and locked bootloader. The old posts talking about Strong pass was an "exploit" in Google servers, obviously, now it's patched.
+**NOTE:** While achieving `MEETS_STRONG_INTEGRITY` is generally not possible on devices with unlocked bootloaders under normal circumstances, **this module empowers advanced users to achieve it by leveraging "trickystore" and an "unrevoked keybox.xml"**.  Utilizing this method, a Strong Integrity verdict is within reach.  This module provides the necessary components to facilitate this advanced configuration.  For more information on Strong Integrity and how to implement this, please refer to the FAQ.
+
+**With the help of Play Integrity Fix, achieving Strong Integrity on unlocked bootloader devices is now a realistic goal for advanced users!**
 
 ## Acknowledgments
 - [kdrag0n](https://github.com/kdrag0n/safetynet-fix) & [Displax](https://github.com/Displax/safetynet-fix) for the original idea.
