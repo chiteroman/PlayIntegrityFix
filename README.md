@@ -43,7 +43,12 @@ And in SafetyNet you should get this:
 - ctsProfileMatch: true
 - evaluationType:  BASIC
 
-NOTE: Strong verdict is impossible to pass on unlocked bootloader devices, there are few devices and "exploits" which will allow you to pass it, but, in normal conditions, this verdict will be green only if you are using stock ROM and locked bootloader. The old posts talking about Strong pass was an "exploit" in Google servers, obviously, now it's patched.
+## A word on passing Strong Integrity
+While this module only returns passing verdicts for as far up as `MEETS_DEVICE_INTEGRITY` (Soon to be only up as far as `MEETS_BASIC_INTEGRITY` by the [new verdict requirements for Android 13 and later](https://developer.android.com/google/play/integrity/improvements)), it is possible to achieve a passing verdict for `MEETS_STRONG_INTEGRITY` by using [5ec1cff's TrickyStore](https://github.com/5ec1cff/TrickyStore), to spoof a valid certificate chain (Often distributed as a file named `keybox.xml` and just called a _keybox_) to your device's [Trusted Execution Environment (TEE) module](https://en.wikipedia.org/wiki/Trusted_execution_environment). 
+
+_**However, it must be stressed that a keybox is hard to come by**_, given that they're leaked (Usually inadvertently) from OEMs and vendors. Even then, they are also often quite quickly revoked, due to a combination of people sending a deluge of server requests (Mostly for flexing their strong verdicts, which they probably didn't need anyway... You know who you are) and Google [deploying specialised crawlers](https://developers.google.com/search/docs/crawling-indexing/google-special-case-crawlers#google-safety) for detecting said keyboxes. You'll know you're using a revoked keybox when you're only passing `MEETS_BASIC_INTEGRITY`, at which point you'll need to find another to return to Strong Integrity, or use the publicly available AOSP keybox/just remove TrickyStore to return to Device Integrity
+
+**TL;DR: Until May 2025, you are completely fine only passing up as far as `MEETS_DEVICE_INTEGRITY`, and _unless it is absolutely necessary for your use case(s), you are better off not diving into this rabbit hole_**
 
 ## Acknowledgments
 - [kdrag0n](https://github.com/kdrag0n/safetynet-fix) & [Displax](https://github.com/Displax/safetynet-fix) for the original idea.
