@@ -32,7 +32,7 @@ After requesting an attestation, you should get this result:
 
 - MEETS_BASIC_INTEGRITY   ✅
 - MEETS_DEVICE_INTEGRITY  ✅
-- MEETS_STRONG_INTEGRITY  ❌
+- MEETS_STRONG_INTEGRITY  ❌ ([Can be achieved with some additional work](https://github.com/chiteroman/PlayIntegrityFix#a-word-on-passing-strong-integrity))
 - MEETS_VIRTUAL_INTEGRITY ❌ (this is for emulators only)
 
 You can know more about verdicts in this post: https://xdaforums.com/t/info-play-integrity-api-replacement-for-safetynet.4479337/
@@ -46,11 +46,13 @@ And in SafetyNet you should get this:
 ## A word on passing Strong Integrity
 While this module only returns passing verdicts for as far up as `MEETS_DEVICE_INTEGRITY`, it is possible to achieve a passing verdict for `MEETS_STRONG_INTEGRITY` by using [5ec1cff's TrickyStore](https://github.com/5ec1cff/TrickyStore). To put simply, this allows for spoofing a valid certificate chain (Often distributed as a file named `keybox.xml` and just called a _keybox_) to your device's [Trusted Execution Environment (TEE) module](https://en.wikipedia.org/wiki/Trusted_execution_environment), in addition to spoofing the bootloader as locked. 
 
-**However, it must be stressed that a keybox is hard to come by**, given that they're leaked (Usually inadvertently) from OEMs and vendors. Even then, they are also often quite quickly revoked, due to a combination of people sending a deluge of server requests (Mostly for flexing their strong verdicts, which they probably didn't need anyway... You know who you are) and Google [deploying specialised crawlers](https://developers.google.com/search/docs/crawling-indexing/google-special-case-crawlers#google-safety) for automated detection. And, as quickly mentioned before, **you'll likely won't even need one, since basic functions (Such as NFC payments and RCS messaging) and the vast majority of apps only mandate device integrity**.
+**However, it must be stressed that a keybox is hard to come by**, given that they're leaked (Usually inadvertently) from OEMs and vendors. Even still, they are also often quite quickly revoked, due to a combination of people sending a deluge of server requests (Mostly for flexing their strong verdicts, which they probably didn't need anyway... You know who you are) and Google [deploying specialised crawlers](https://developers.google.com/search/docs/crawling-indexing/google-special-case-crawlers#google-safety) for automated detection. And, as quickly mentioned before, **you'll likely won't even need one, since basic functions (NFC payments and RCS messaging... etc.) and the vast majority of apps only mandate device integrity/a spoofed locked bootloader**.
 
-As for what happens when a keybox is _eventually_ revoked, you'll know when you're only passing `MEETS_BASIC_INTEGRITY` or by checking the key itself via [vvb2060's Key Attestation Demo](https://github.com/vvb2060/KeyAttestation). At this point, you'll need to find another unrevoked keybox (Strong integrity), use the publicly available AOSP keybox (Device integrity), or remove TrickyStore (Device integrity).
+As for when a keybox is _eventually_ revoked, you'll know it's happened when you're only passing `MEETS_BASIC_INTEGRITY` or by checking the key's validity status via [vvb2060's Key Attestation Demo](https://github.com/vvb2060/KeyAttestation). At this point, you'll need to find another unrevoked keybox (Strong integrity), use the publicly available AOSP keybox (Device integrity), or just remove TrickyStore entirely (Device integrity).
 
 _**TL;DR: Unless it is ABSOLUTELY VITAL for your use case(s), chances are you'll be completely fine only passing up as far as `MEETS_DEVICE_INTEGRITY`, and not diving into this rabbit hole.**_
+
+_NOTE: [Per the upcoming changes for Play Integrity's verdicts on May 2025](https://developer.android.com/google/play/integrity/improvements), by default you'll only pass `MEETS_BASIC_INTEGRITY` as device integrity now requires a locked bootloader on Android 13 and later. While this can be circumvented by using the `spoofVendingSdk` attribute (Spoofs SDK 32/Android 12) in your `pif.json` configuration, **this will, to a varying degree, break some functionality in the Play Store** ([Given that this is an experimental feature of PIF](https://github.com/osm0sis/PlayIntegrityFork/pull/30)) including the likes of degraded ease of navigation, and the store outright crashing whenever an app is installed/updated. YMMV, to which it probably will._
 
 ## Acknowledgments
 - [kdrag0n](https://github.com/kdrag0n/safetynet-fix) & [Displax](https://github.com/Displax/safetynet-fix) for the original idea.
