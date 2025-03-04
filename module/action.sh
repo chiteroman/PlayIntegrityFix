@@ -3,6 +3,7 @@
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
 MODDIR=/data/adb/modules/playintegrityfix
 version=$(grep "^version=" $MODDIR/module.prop | sed 's/version=//g')
+FORCE_PREVIEW=1
 
 echo "[+] PlayIntegrityFix $version"
 echo "[+] $(basename "$0")"
@@ -65,7 +66,7 @@ BETA_URL=$(grep -o 'https://developer.android.com/about/versions/.*[0-9]"' PIXEL
 download "$BETA_URL" PIXEL_LATEST_HTML
 
 # Handle Developer Preview vs Beta
-if grep -qE 'Developer Preview|tooltip>.*preview program' PIXEL_LATEST_HTML; then
+if grep -qE 'Developer Preview|tooltip>.*preview program' PIXEL_LATEST_HTML && [ "$FORCE_PREVIEW" = 0 ]; then
 	# Use the second latest version for beta
 	BETA_URL=$(grep -o 'https://developer.android.com/about/versions/.*[0-9]"' PIXEL_VERSIONS_HTML | sort -ru | cut -d\" -f1 | head -n2 | tail -n1)
 	download "$BETA_URL" PIXEL_BETA_HTML

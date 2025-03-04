@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Play Integrity Fix</title>
-	<link rel="stylesheet" href="styles.css" type="text/css">
-	<link rel="stylesheet" type="text/css" href="/mmrl/insets.css" />
-	<script type="module" crossorigin src="scripts.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Play Integrity Fix</title>
+    <link rel="stylesheet" href="styles.css" type="text/css">
+    <link rel="stylesheet" type="text/css" href="/mmrl/insets.css" />
+    <script type="module" crossorigin src="scripts.js"></script>
 </head>
 <body>
     <div class="content">
@@ -18,15 +18,22 @@
         </div>
         <div class="button-box">
             <div class="toggle-list ripple-element" id="fetch">
-				<span class="toggle-text">Fetch pif.json</span>
-			</div>
-			<div class="toggle-list ripple-element" id="sdk-vending-toggle-container">
-				<span class="toggle-text">Spoof sdk version to Play Store</span>
-				<label class="toggle-switch">
-					<input type="checkbox" id="toggle-sdk-vending" disabled>
-					<span class="slider round"></span>
-				</label>
-			</div>
+                <span class="toggle-text">Fetch pif.json</span>
+            </div>
+            <div class="toggle-list ripple-element" id="preview-fp-toggle-container">
+                <span class="toggle-text">Use preview fingerprint</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="toggle-preview-fp" disabled>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <div class="toggle-list ripple-element" id="sdk-vending-toggle-container">
+                <span class="toggle-text">Spoof sdk version to Play Store</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="toggle-sdk-vending" disabled>
+                    <span class="slider round"></span>
+                </label>
+            </div>
         </div>
         <div class="output-terminal">
             <div class="output-terminal-header">

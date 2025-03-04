@@ -20,6 +20,7 @@ async function execCommand(command) {
 function applyButtonEventListeners() {
     const fetchButton = document.getElementById('fetch');
     const sdkVendingToggle = document.getElementById('sdk-vending-toggle-container');
+    const previewFpToggle = document.getElementById('preview-fp-toggle-container');
     const clearButton = document.querySelector('.clear-terminal');
 
     fetchButton.addEventListener('click', runAction);
@@ -43,8 +44,19 @@ function applyButtonEventListeners() {
             appendToOutput(`[+] Successfully changed spoofVendingSdk to ${isChecked ? 0 : 1}`);
             document.getElementById('toggle-sdk-vending').checked = !isChecked;
         } catch (error) {
-            appendToOutput("[-] Failed to change spoofVendingSdk");
+            appendToOutput("[!] Failed to change spoofVendingSdk");
             console.error('Failed to toggle sdk vending:', error);
+        }
+    });
+    previewFpToggle.addEventListener('click', async () => {
+        try {
+            const isChecked = document.getElementById('toggle-preview-fp').checked;
+            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${isChecked ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
+            appendToOutput(`[+] Switched fingerprint to ${isChecked ? 'beta' : 'preview'}`);
+            loadPreviewFingerprintConfig();
+        } catch (error) {
+            appendToOutput("[!] Failed to switch fingerprint type");
+            console.error('Failed to switch fingerprint type:', error);
         }
     });
     clearButton.addEventListener('click', () => {
@@ -92,19 +104,40 @@ async function loadVersionFromModuleProp() {
         const version = await execCommand("grep '^version=' /data/adb/modules/playintegrityfix/module.prop | cut -d'=' -f2");
         versionElement.textContent = version.trim();
     } catch (error) {
-        appendToOutput("[-] Failed to read version from module.prop");
+        appendToOutput("[!] Failed to read version from module.prop");
         console.error("Failed to read version from module.prop:", error);
     }
 }
 
 // Function to load spoofVendingSdk config
 async function loadSpoofVendingSdkConfig() {
-    const sdkVendingToggle = document.getElementById('toggle-sdk-vending');
-    const isChecked = await execCommand(`grep -o '"spoofVendingSdk": [01]' /data/adb/modules/playintegrityfix/pif.json | cut -d' ' -f2`);
-    if (isChecked === '0') {
-        sdkVendingToggle.checked = false;
-    } else {
-        sdkVendingToggle.checked = true;
+    try {
+        const sdkVendingToggle = document.getElementById('toggle-sdk-vending');
+        const isChecked = await execCommand(`grep -o '"spoofVendingSdk": [01]' /data/adb/modules/playintegrityfix/pif.json | cut -d' ' -f2`);
+        if (isChecked === '0') {
+            sdkVendingToggle.checked = false;
+        } else {
+            sdkVendingToggle.checked = true;
+        }
+    } catch (error) {
+        appendToOutput("[!] Failed to load spoofVendingSdk config");
+        console.error("Failed to load spoofVendingSdk config:", error);
+    }
+}
+
+// Function to load preview fingerprint config
+async function loadPreviewFingerprintConfig() {
+    try {
+        const previewFpToggle = document.getElementById('toggle-preview-fp');
+        const isChecked = await execCommand(`grep -o 'FORCE_PREVIEW=[01]' /data/adb/modules/playintegrityfix/action.sh | cut -d'=' -f2`);
+        if (isChecked === '0') {
+            previewFpToggle.checked = false;
+        } else {
+            previewFpToggle.checked = true;
+        }
+    } catch (error) {
+        appendToOutput("[!] Failed to load preview fingerprint config");
+        console.error("Failed to load preview fingerprint config:", error);
     }
 }
 
@@ -262,6 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkMMRL();
     loadVersionFromModuleProp();
     loadSpoofVendingSdkConfig();
+    loadPreviewFingerprintConfig();
     applyButtonEventListeners();
     applyRippleEffect();
 });
