@@ -4,5 +4,8 @@
   "MODEL": "Pixel 6",
   "SECURITY_PATCH": "2025-02-05",
   "DEVICE_INITIAL_SDK_INT": 21,
-  "spoofVendingSdk": 0
+  "spoofProvider": true,
+  "spoofProps": true,
+  "spoofSignature": false,
+  "DEBUG": false
 }

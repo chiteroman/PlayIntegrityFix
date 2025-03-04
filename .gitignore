@@ -11,3 +11,4 @@ local.properties
 *.dex
 *.so
 *.zip
+*.jar
