@@ -60,6 +60,18 @@ if [ -d "/data/adb/modules/MagiskHidePropsConf" ]; then
     ui_print "! WARNING, MagiskHidePropsConf module may cause issues with PIF."
 fi
 
+# Preserve previous setting
+spoofConfig="spoofProvider spoofProps spoofSignature DEBUG"
+for config in $spoofConfig; do
+    grep -q "$config" "/data/adb/modules/playintegrityfix/pif.json" || continue
+    if grep -q "\"$config\": true" "/data/adb/modules/playintegrityfix/pif.json"; then
+        sed -i "s/\"$config\": .*/\"$config\": true,/" "$MODPATH/pif.json"
+    else
+        sed -i "s/\"$config\": .*/\"$config\": false,/" "$MODPATH/pif.json"
+    fi
+done
+sed -i ':a;N;$!ba;s/,\n}/\n}/g' "$MODPATH/pif.json"
+
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
     ui_print "- Backup custom pif.json"
