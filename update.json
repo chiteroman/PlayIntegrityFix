@@ -1,6 +1,6 @@
 {
-  "version": "v18.6",
-  "versionCode": 18600,
-  "zipUrl": "https://github.com/chiteroman/PlayIntegrityFix/releases/download/v18.6/PlayIntegrityFix_v18.6.zip",
-  "changelog": "https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/changelog.md"
+  "version": "v2-inject",
+  "versionCode": 2,
+  "zipUrl": "https://github.com/chiteroman/PlayIntegrityFix/releases/download/inject/PlayIntegrityFix.zip",
+  "changelog": "https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/inject/changelog.md"
 }
