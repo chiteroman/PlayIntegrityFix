@@ -61,10 +61,16 @@ if [ -d "/data/adb/modules/MagiskHidePropsConf" ]; then
 fi
 
 # Preserve previous setting
-spoofVending="$(grep -oE '"spoofVendingSdk": [01]' "/data/adb/modules/playintegrityfix/pif.json" | cut -d' ' -f2)"
-if [ -n "$spoofVending" ] && [ "$spoofVending" -eq 1 ]; then
-    sed -i 's/"spoofVendingSdk": 0/"spoofVendingSdk": 1/' "$MODPATH/pif.json"
-fi
+spoofConfig="spoofProvider spoofProps spoofSignature DEBUG"
+for config in $spoofConfig; do
+    grep -q "$config" "/data/adb/modules/playintegrityfix/pif.json" || continue
+    if grep -q "\"$config\": true" "/data/adb/modules/playintegrityfix/pif.json"; then
+        sed -i "s/\"$config\": .*/\"$config\": true,/" "$MODPATH/pif.json"
+    else
+        sed -i "s/\"$config\": .*/\"$config\": false,/" "$MODPATH/pif.json"
+    fi
+done
+sed -i ':a;N;$!ba;s/,\n}/\n}/g' "$MODPATH/pif.json"
 
 # Check custom fingerprint
 if [ -f "/data/adb/pif.json" ]; then
