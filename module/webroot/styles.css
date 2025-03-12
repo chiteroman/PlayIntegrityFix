@@ -16,12 +16,16 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    height: 90vh;
+    height: 95vh;
     gap: 15px;
 }
 
 .header {
     user-select: none;
+}
+
+.header h3 {
+    margin: 8px 0;
 }
 
 .button-box {
@@ -40,7 +44,8 @@ body {
     display: flex;
     align-items: center;
     background-color: #fff;
-    padding: 10px 20px;
+    height: 25px;
+    padding: 8px 20px;
     white-space: nowrap;
     text-align: left;
     border-bottom: 1px solid #ccc;
@@ -50,7 +55,6 @@ body {
 
 .toggle-list:last-child {
     border-bottom: none;
-    margin-bottom: 0;
 }
 
 .toggle-text {
