@@ -25,8 +25,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18700
-        versionName = "v18.7"
+        versionCode = 18800
+        versionName = "v18.8"
         multiDexEnabled = false
 
         externalNativeBuild {
@@ -48,7 +48,7 @@ android {
                 )
 
                 cppFlags(
-                    "-std=c++23",
+                    "-std=c++26",
                     "-fno-exceptions",
                     "-fno-rtti",
                     "-fvisibility=hidden",
@@ -77,6 +77,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.30.3+"
         }
     }
 }
