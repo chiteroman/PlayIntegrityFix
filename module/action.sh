@@ -98,12 +98,6 @@ sdk_version="$(getprop ro.build.version.sdk)"
 sdk_version="${sdk_version:-25}"
 echo "Device SDK version: $sdk_version"
 
-# Preserve previous setting
-spoofVending="$(grep -oE '"spoofVendingSdk": [01]' "$MODDIR/pif.json" | cut -d' ' -f2)"
-if [ -z "$spoofVending" ] || [ "$spoofVending" != 1 ]; then
-    spoofVending=0
-fi
-
 echo "- Dumping values to pif.json ..."
 cat <<EOF | tee pif.json
 {
@@ -111,8 +105,7 @@ cat <<EOF | tee pif.json
   "MANUFACTURER": "Google",
   "MODEL": "$MODEL",
   "SECURITY_PATCH": "$SECURITY_PATCH",
-  "DEVICE_INITIAL_SDK_INT": $sdk_version,
-  "spoofVendingSdk": $spoofVending
+  "DEVICE_INITIAL_SDK_INT": $sdk_version
 }
 EOF
 
