@@ -19,35 +19,10 @@ async function execCommand(command) {
 // Apply button event listeners
 function applyButtonEventListeners() {
     const fetchButton = document.getElementById('fetch');
-    const sdkVendingToggle = document.getElementById('sdk-vending-toggle-container');
     const previewFpToggle = document.getElementById('preview-fp-toggle-container');
     const clearButton = document.querySelector('.clear-terminal');
 
     fetchButton.addEventListener('click', runAction);
-    sdkVendingToggle.addEventListener('click', async () => {
-        try {
-            const pifPath = await execCommand(`
-                [ ! -f /data/adb/modules/playintegrityfix/pif.json ] || echo /data/adb/modules/playintegrityfix/pif.json
-                [ ! -f /data/adb/pif.json ] || echo /data/adb/pif.json
-            `);
-            if (pifPath.trim() === "") {
-                appendToOutput("[!] No pif.json found");
-                return;
-            }
-            const isChecked = document.getElementById('toggle-sdk-vending').checked;
-            const paths = pifPath.trim().split('\n');
-            for (const path of paths) {
-                if (path) {
-                    await execCommand(`sed -i 's/"spoofVendingSdk": [01]/"spoofVendingSdk": ${isChecked ? 0 : 1}/' ${path}`);
-                }
-            }
-            appendToOutput(`[+] Successfully changed spoofVendingSdk to ${isChecked ? 0 : 1}`);
-            document.getElementById('toggle-sdk-vending').checked = !isChecked;
-        } catch (error) {
-            appendToOutput("[!] Failed to change spoofVendingSdk");
-            console.error('Failed to toggle sdk vending:', error);
-        }
-    });
     previewFpToggle.addEventListener('click', async () => {
         try {
             const isChecked = document.getElementById('toggle-preview-fp').checked;
@@ -106,22 +81,6 @@ async function loadVersionFromModuleProp() {
     } catch (error) {
         appendToOutput("[!] Failed to read version from module.prop");
         console.error("Failed to read version from module.prop:", error);
-    }
-}
-
-// Function to load spoofVendingSdk config
-async function loadSpoofVendingSdkConfig() {
-    try {
-        const sdkVendingToggle = document.getElementById('toggle-sdk-vending');
-        const isChecked = await execCommand(`grep -o '"spoofVendingSdk": [01]' /data/adb/modules/playintegrityfix/pif.json | cut -d' ' -f2`);
-        if (isChecked === '0') {
-            sdkVendingToggle.checked = false;
-        } else {
-            sdkVendingToggle.checked = true;
-        }
-    } catch (error) {
-        appendToOutput("[!] Failed to load spoofVendingSdk config");
-        console.error("Failed to load spoofVendingSdk config:", error);
     }
 }
 
@@ -294,7 +253,6 @@ function updateFontSize(newSize) {
 document.addEventListener('DOMContentLoaded', async () => {
     checkMMRL();
     loadVersionFromModuleProp();
-    loadSpoofVendingSdkConfig();
     loadPreviewFingerprintConfig();
     applyButtonEventListeners();
     applyRippleEffect();
