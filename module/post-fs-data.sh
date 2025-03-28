@@ -4,7 +4,6 @@ MODPATH="${0%/*}"
 # Remove Play Services and Play Store from Magisk DenyList when set to Enforce in normal mode
 if magisk --denylist status; then
     magisk --denylist rm com.google.android.gms
-    magisk --denylist rm com.android.vending
 else
     # Check if Shamiko is installed and whitelist feature isn't enabled
     if [ -d "/data/adb/modules/zygisk_shamiko" ] && [ ! -f "/data/adb/shamiko/whitelist" ]; then

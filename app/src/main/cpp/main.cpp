@@ -20,9 +20,6 @@
 #define CUSTOM_JSON_FORK "/data/adb/modules/playintegrityfix/custom.pif.json"
 #define CUSTOM_JSON "/data/adb/pif.json"
 
-#define VENDING_PACKAGE "com.android.vending"
-#define DROIDGUARD_PACKAGE "com.google.android.gms.unstable"
-
 static ssize_t xread(int fd, void *buffer, size_t count) {
     ssize_t total = 0;
     char *buf = static_cast<char *>(buffer);
@@ -119,25 +116,23 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        const char *rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+        const char *rawName = env->GetStringUTFChars(args->nice_name, nullptr);
 
-        if (!args) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
+        std::string dir, name;
+
+        if (rawDir) {
+            dir = rawDir;
+            env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
         }
 
-        auto dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-
-        if (!dir) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
+        if (rawName) {
+            name = rawName;
+            env->ReleaseStringUTFChars(args->nice_name, rawName);
         }
 
-        std::string_view vDir(dir);
-
-        bool isGms =
-                vDir.ends_with("/com.google.android.gms") || vDir.ends_with("/com.android.vending");
-
-        env->ReleaseStringUTFChars(args->app_data_dir, dir);
+        bool isGms = dir.ends_with("/com.google.android.gms");
+        bool isGmsUnstable = name == "com.google.android.gms.unstable";
 
         if (!isGms) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
@@ -146,30 +141,10 @@ public:
 
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        auto name = env->GetStringUTFChars(args->nice_name, nullptr);
-
-        if (!name) {
+        if (!isGmsUnstable) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
             return;
         }
-
-        std::string_view vName(name);
-
-        isGmsUnstable = vName == DROIDGUARD_PACKAGE;
-        isVending = vName == VENDING_PACKAGE;
-
-        env->ReleaseStringUTFChars(args->nice_name, name);
-
-        if (!isGmsUnstable && !isVending) {
-            api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-            return;
-        }
-
-        if (isGmsUnstable)
-            LOGD("We are in GMS unstable process!");
-
-        if (isVending)
-            LOGD("We are in Play Store process!");
 
         int fd = api->connectCompanion();
 
@@ -217,26 +192,21 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty()) return;
+        if (dexVector.empty() || json.empty()) return;
 
-        if (isGmsUnstable) {
-            UpdateBuildFields();
+        UpdateBuildFields();
 
-            if (spoofProvider || spoofSignature) {
-                injectDex();
-            } else {
-                LOGD("Dex file won't be injected due spoofProvider and spoofSignature are false");
-            }
+        if (spoofProvider || spoofSignature) {
+            injectDex();
+        } else {
+            LOGD("Dex file won't be injected due spoofProvider and spoofSignature are false");
+        }
 
-            if (spoofProps) {
-                if (!doHook()) {
-                    dlclose();
-                }
-            } else {
+        if (spoofProps) {
+            if (!doHook()) {
                 dlclose();
             }
-        } else if (isVending) {
-            doSpoofVending();
+        } else {
             dlclose();
         }
 
@@ -253,83 +223,19 @@ public:
 private:
     zygisk::Api *api = nullptr;
     JNIEnv *env = nullptr;
-    bool isGmsUnstable = false;
-    bool isVending = false;
     std::vector<char> dexVector;
     nlohmann::json json;
     bool spoofProps = true;
     bool spoofProvider = true;
     bool spoofSignature = false;
-    int spoofVendingSdk = 0;
 
     void dlclose() {
         LOGD("dlclose zygisk lib");
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
-    void doSpoofVending() {
-        if (spoofVendingSdk < 1) return;
-        int requestSdk = (spoofVendingSdk == 1) ? 32 : spoofVendingSdk;
-        int targetSdk;
-        int oldValue;
-
-        jclass buildVersionClass = nullptr;
-        jfieldID sdkIntFieldID = nullptr;
-
-        buildVersionClass = env->FindClass("android/os/Build$VERSION");
-        if (buildVersionClass == nullptr) {
-            LOGE("Build.VERSION class not found");
-            env->ExceptionClear();
-            return;
-        }
-
-        sdkIntFieldID = env->GetStaticFieldID(buildVersionClass, "SDK_INT", "I");
-        if (sdkIntFieldID == nullptr) {
-            LOGE("SDK_INT field not found");
-            env->ExceptionClear();
-            env->DeleteLocalRef(buildVersionClass);
-            return;
-        }
-
-        oldValue = env->GetStaticIntField(buildVersionClass, sdkIntFieldID);
-        targetSdk = std::min(oldValue, requestSdk);
-
-        if (oldValue == targetSdk) {
-            env->DeleteLocalRef(buildVersionClass);
-            return;
-        }
-
-        env->SetStaticIntField(buildVersionClass, sdkIntFieldID, targetSdk);
-
-        if (env->ExceptionCheck()) {
-            env->ExceptionDescribe();
-            env->ExceptionClear();
-            LOGE("SDK_INT field not accessible (JNI Exception)");
-        } else {
-            LOGE("[SDK_INT]: %d -> %d", oldValue, targetSdk);
-        }
-
-        env->DeleteLocalRef(buildVersionClass);
-    }
-
     void parseJSON() {
         if (json.empty()) return;
-
-        if (json.contains("spoofVendingSdk")) {
-            if (json["spoofVendingSdk"].is_string()) {
-                spoofVendingSdk = std::stoi(json["spoofVendingSdk"].get<std::string>());
-            } else if (json["spoofVendingSdk"].is_number_integer()) {
-                spoofVendingSdk = json["spoofVendingSdk"].get<int>();
-            } else {
-                LOGE("Error parsing spoofVendingSdk!");
-            }
-            json.erase("spoofVendingSdk");
-        }
-
-        if (isVending) {
-            json.clear();
-            return;
-        }
 
         if (json.contains("DEVICE_INITIAL_SDK_INT")) {
             if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
