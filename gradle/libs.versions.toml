@@ -1,5 +1,5 @@
 [versions]
-agp = "8.9.0"
+agp = "8.9.1"
 cxx = "27.0.12077973"
 hiddenapibypass = "6.1"
 
