@@ -1,19 +1,8 @@
-let shellRunning = false;
+let actionRunning = false;
 let initialPinchDistance = null;
 let currentFontSize = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 24;
-
-const spoofProviderToggle = document.getElementById('toggle-spoofProvider');
-const spoofPropsToggle = document.getElementById('toggle-spoofProps');
-const spoofSignatureToggle = document.getElementById('toggle-spoofSignature');
-const debugToggle = document.getElementById('toggle-debug');
-const spoofConfig = [
-    { container: "spoofProvider-toggle-container", toggle: spoofProviderToggle, type: 'spoofProvider' },
-    { container: "spoofProps-toggle-container", toggle: spoofPropsToggle, type: 'spoofProps' },
-    { container: "spoofSignature-toggle-container", toggle: spoofSignatureToggle, type: 'spoofSignature' },
-    { container: "debug-toggle-container", toggle: debugToggle, type: 'DEBUG' }
-];
 
 // Execute shell commands with ksu.exec
 async function execCommand(command) {
@@ -30,13 +19,36 @@ async function execCommand(command) {
 // Apply button event listeners
 function applyButtonEventListeners() {
     const fetchButton = document.getElementById('fetch');
+    const sdkVendingToggle = document.getElementById('sdk-vending-toggle-container');
     const previewFpToggle = document.getElementById('preview-fp-toggle-container');
     const clearButton = document.querySelector('.clear-terminal');
 
     fetchButton.addEventListener('click', runAction);
+    sdkVendingToggle.addEventListener('click', async () => {
+        try {
+            const pifPath = await execCommand(`
+                [ ! -f /data/adb/modules/playintegrityfix/pif.json ] || echo /data/adb/modules/playintegrityfix/pif.json
+                [ ! -f /data/adb/pif.json ] || echo /data/adb/pif.json
+            `);
+            if (pifPath.trim() === "") {
+                appendToOutput("[!] No pif.json found");
+                return;
+            }
+            const isChecked = document.getElementById('toggle-sdk-vending').checked;
+            const paths = pifPath.trim().split('\n');
+            for (const path of paths) {
+                if (path) {
+                    await execCommand(`sed -i 's/"spoofVendingSdk": [01]/"spoofVendingSdk": ${isChecked ? 0 : 1}/' ${path}`);
+                }
+            }
+            appendToOutput(`[+] Successfully changed spoofVendingSdk to ${isChecked ? 0 : 1}`);
+            document.getElementById('toggle-sdk-vending').checked = !isChecked;
+        } catch (error) {
+            appendToOutput("[!] Failed to change spoofVendingSdk");
+            console.error('Failed to toggle sdk vending:', error);
+        }
+    });
     previewFpToggle.addEventListener('click', async () => {
-        if (shellRunning) return;
-        shellRunning = true;
         try {
             const isChecked = document.getElementById('toggle-preview-fp').checked;
             await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${isChecked ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
@@ -46,7 +58,6 @@ function applyButtonEventListeners() {
             appendToOutput("[!] Failed to switch fingerprint type");
             console.error('Failed to switch fingerprint type:', error);
         }
-        shellRunning = false;
     });
     clearButton.addEventListener('click', () => {
         const output = document.querySelector('.output-terminal-content');
@@ -98,54 +109,20 @@ async function loadVersionFromModuleProp() {
     }
 }
 
-// Function to load spoof config
-async function loadSpoofConfig() {
+// Function to load spoofVendingSdk config
+async function loadSpoofVendingSdkConfig() {
     try {
-        const pifJson = await execCommand(`cat /data/adb/modules/playintegrityfix/pif.json`);
-        const config = JSON.parse(pifJson);
-        spoofProviderToggle.checked = config.spoofProvider;
-        spoofPropsToggle.checked = config.spoofProps;
-        spoofSignatureToggle.checked = config.spoofSignature;
-        debugToggle.checked = config.DEBUG;
-    } catch (error) {
-        appendToOutput(`[!] Failed to load spoof config`);
-        console.error(`Failed to load spoof config:`, error);
-    }
-}
-
-// Function to setup spoof config button
-function setupSpoofConfigButton(container, toggle, type) {
-    document.getElementById(container).addEventListener('click', async () => {
-        if (shellRunning) return;
-        shellRunning = true;
-        try {
-            const pifFile = await execCommand(`
-                [ ! -f /data/adb/modules/playintegrityfix/pif.json ] || echo "/data/adb/modules/playintegrityfix/pif.json"
-                [ ! -f /data/adb/pif.json ] || echo "/data/adb/pif.json"
-            `);
-            const files = pifFile.split('\n').filter(line => line.trim() !== '');
-            for (const line of files) {
-                await updateSpoofConfig(toggle, type, line.trim());
-            }
-            execCommand(`killall com.google.android.gms.unstable || true`);
-            loadSpoofConfig();
-            appendToOutput(`[+] Changed ${type} config to ${!toggle.checked}`);
-        } catch (error) {
-            appendToOutput(`[!] Failed to update ${type} config`);
-            console.error(`Failed to update ${type} config:`, error);
+        const sdkVendingToggle = document.getElementById('toggle-sdk-vending');
+        const isChecked = await execCommand(`grep -o '"spoofVendingSdk": [01]' /data/adb/modules/playintegrityfix/pif.json | cut -d' ' -f2`);
+        if (isChecked === '0') {
+            sdkVendingToggle.checked = false;
+        } else {
+            sdkVendingToggle.checked = true;
         }
-        shellRunning = false;
-    });
-}
-
-// Function to update spoof config
-async function updateSpoofConfig(toggle, type, pifFile) {
-    const isChecked = toggle.checked;
-    const pifJson = await execCommand(`cat ${pifFile}`);
-    const config = JSON.parse(pifJson);
-    config[type] = !isChecked;
-    const newPifJson = JSON.stringify(config, null, 2);
-    await execCommand(`echo '${newPifJson}' > ${pifFile}`);
+    } catch (error) {
+        appendToOutput("[!] Failed to load spoofVendingSdk config");
+        console.error("Failed to load spoofVendingSdk config:", error);
+    }
 }
 
 // Function to load preview fingerprint config
@@ -181,8 +158,8 @@ function appendToOutput(content) {
 
 // Function to run the script and display its output
 async function runAction() {
-    if (shellRunning) return;
-    shellRunning = true;
+    if (actionRunning) return;
+    actionRunning = true;
     try {
         appendToOutput("[+] Fetching pif.json...");
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -208,7 +185,7 @@ async function runAction() {
             appendToOutput("");
         }
     }
-    shellRunning = false;
+    actionRunning = false;
 }
 
 // Function to apply ripple effect
@@ -317,10 +294,7 @@ function updateFontSize(newSize) {
 document.addEventListener('DOMContentLoaded', async () => {
     checkMMRL();
     loadVersionFromModuleProp();
-    await loadSpoofConfig();
-    spoofConfig.forEach(config => {
-        setupSpoofConfigButton(config.container, config.toggle, config.type);
-    });
+    loadSpoofVendingSdkConfig();
     loadPreviewFingerprintConfig();
     applyButtonEventListeners();
     applyRippleEffect();
