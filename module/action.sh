@@ -98,6 +98,16 @@ sdk_version="$(getprop ro.build.version.sdk)"
 sdk_version="${sdk_version:-25}"
 echo "Device SDK version: $sdk_version"
 
+# Preserve previous setting
+spoofConfig="spoofProvider spoofProps spoofSignature DEBUG"
+for config in $spoofConfig; do
+	if grep -q "\"$config\": true" "$MODDIR/pif.json"; then
+		eval "$config=true"
+	else
+		eval "$config=false"
+	fi
+done
+
 echo "- Dumping values to pif.json ..."
 cat <<EOF | tee pif.json
 {
@@ -105,7 +115,11 @@ cat <<EOF | tee pif.json
   "MANUFACTURER": "Google",
   "MODEL": "$MODEL",
   "SECURITY_PATCH": "$SECURITY_PATCH",
-  "DEVICE_INITIAL_SDK_INT": $sdk_version
+  "DEVICE_INITIAL_SDK_INT": $sdk_version,
+  "spoofProvider": $spoofProvider,
+  "spoofProps": $spoofProps,
+  "spoofSignature": $spoofSignature,
+  "DEBUG": $DEBUG
 }
 EOF
 
