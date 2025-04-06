@@ -5,8 +5,6 @@ plugins {
 android {
     namespace = "es.chiteroman.playintegrityfix"
     compileSdk = 35
-    buildToolsVersion = "35.0.1"
-    ndkVersion = "28.0.13004108"
 
     buildFeatures {
         prefab = true
@@ -25,8 +23,8 @@ android {
         applicationId = "es.chiteroman.playintegrityfix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18800
-        versionName = "v18.8"
+        versionCode = 18900
+        versionName = "v18.9"
         multiDexEnabled = false
 
         externalNativeBuild {
@@ -77,7 +75,6 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.30.3+"
         }
     }
 }

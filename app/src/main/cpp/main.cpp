@@ -3,10 +3,6 @@
 #include <unistd.h>
 #include "zygisk.hpp"
 #include "dobby.h"
-
-#define JSON_NOEXCEPTION 1
-#define JSON_NO_IO 1
-
 #include "json.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
@@ -47,7 +43,7 @@ static ssize_t xwrite(int fd, const void *buffer, size_t count) {
 }
 
 static bool DEBUG = false;
-static std::string DEVICE_INITIAL_SDK_INT, SECURITY_PATCH, BUILD_ID;
+static std::string DEVICE_INITIAL_SDK_INT = "21", SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
