@@ -2,10 +2,10 @@ name: Android CI
 
 on:
   push:
-    branches: main
+    branches: inject
     paths-ignore: '**.md'
   pull_request:
-    branches: main
+    branches: inject
     paths-ignore: '**.md'
 
 jobs:
