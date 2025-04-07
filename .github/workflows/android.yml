@@ -2,36 +2,39 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: main
+    paths-ignore: '**.md'
   pull_request:
-    branches: [ "main" ]
+    branches: main
+    paths-ignore: '**.md'
 
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: macos-15
 
     steps:
     - name: Check out
       uses: actions/checkout@v4
       with:
-        submodules: "recursive"
+        submodules: 'recursive'
         fetch-depth: 1
 
-    - name: set up JDK 21
+    - name: Set up JDK
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '21'
+        java-version: 21
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-      
+
     - name: Build with Gradle
       run: ./gradlew assembleRelease
-      
-    - name: Upload PlayIntegrityFix.zip
+
+    - name: Upload CI module zip as artifact zip
       uses: actions/upload-artifact@v4
       with:
-        name: PlayIntegrityFix
-        path: module/*
+        name: PlayIntegrityFix-CI_#${{ github.run_number }}
+        path: 'module/*'
+        compression-level: 9
