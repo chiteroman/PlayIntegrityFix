@@ -93,19 +93,13 @@ echo "$MODEL ($PRODUCT)"
 FINGERPRINT="$(strings PIXEL_ZIP_METADATA | grep -am1 'post-build=' | cut -d= -f2)"
 SECURITY_PATCH="$(strings PIXEL_ZIP_METADATA | grep -am1 'security-patch-level=' | cut -d= -f2)"
 
-# Get device SDK version
-sdk_version="$(getprop ro.build.version.sdk)"
-sdk_version="${sdk_version:-25}"
-echo "Device SDK version: $sdk_version"
-
 echo "- Dumping values to pif.json ..."
 cat <<EOF | tee pif.json
 {
   "FINGERPRINT": "$FINGERPRINT",
   "MANUFACTURER": "Google",
   "MODEL": "$MODEL",
-  "SECURITY_PATCH": "$SECURITY_PATCH",
-  "DEVICE_INITIAL_SDK_INT": $sdk_version
+  "SECURITY_PATCH": "$SECURITY_PATCH"
 }
 EOF
 
