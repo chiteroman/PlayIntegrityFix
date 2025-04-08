@@ -15,7 +15,7 @@ static nlohmann::json json;
 static bool spoofProps = true, spoofProvider = true, spoofSignature = false;
 
 static bool DEBUG = false;
-static std::string DEVICE_INITIAL_SDK_INT, SECURITY_PATCH, BUILD_ID;
+static std::string DEVICE_INITIAL_SDK_INT = "21", SECURITY_PATCH, BUILD_ID;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
@@ -215,11 +215,10 @@ static void injectDex() {
     auto dexClClass = env->FindClass("dalvik/system/PathClassLoader");
     auto dexClInit = env->GetMethodID(
             dexClClass, "<init>",
-            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/ClassLoader;)V");
-    auto str1 = env->NewStringUTF((dir + "/classes.dex").c_str());
-    auto str2 = env->NewStringUTF(dir.c_str());
+            "(Ljava/lang/String;Ljava/lang/ClassLoader;)V");
+    auto classesJar = env->NewStringUTF((dir + "/classes.dex").c_str());
     auto dexCl =
-            env->NewObject(dexClClass, dexClInit, str1, str2, systemClassLoader);
+            env->NewObject(dexClClass, dexClInit, classesJar, systemClassLoader);
 
     if (env->ExceptionCheck()) {
         env->ExceptionDescribe();
@@ -257,8 +256,7 @@ static void injectDex() {
     env->DeleteLocalRef(entryClassObj);
     env->DeleteLocalRef(jsonStr);
     env->DeleteLocalRef(dexCl);
-    env->DeleteLocalRef(str1);
-    env->DeleteLocalRef(str2);
+    env->DeleteLocalRef(classesJar);
     env->DeleteLocalRef(dexClClass);
     env->DeleteLocalRef(clClass);
 
@@ -266,8 +264,7 @@ static void injectDex() {
 }
 
 extern "C" [[gnu::visibility("default"), maybe_unused]] bool
-init(JavaVM *vm, const std::string &gmsDir) {
-    bool close = true;
+init(JavaVM *vm, const std::string &gmsDir, bool trickyStore, bool testSignedRom) {
 
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
         LOGE("[INJECT] JNI_ERR!");
@@ -283,20 +280,28 @@ init(JavaVM *vm, const std::string &gmsDir) {
 
     parseJSON();
 
+    if (trickyStore) {
+        spoofProvider = false;
+        spoofSignature = false;
+        spoofProps = false;
+    }
+
+    if (testSignedRom) {
+        spoofProvider = true;
+        spoofSignature = true;
+    }
+
     UpdateBuildFields();
 
     if (spoofProvider || spoofSignature) {
         injectDex();
     } else {
-        LOGD("[INJECT] Dex file won't be injected due spoofProvider and "
-             "spoofSignature are false");
+        LOGD("[INJECT] Dex file won't be injected due spoofProvider and spoofSignature are false");
     }
 
     if (spoofProps) {
-        close = !doHook();
+        return !doHook();
     }
 
-    LOGD("[INJECT] Done!");
-
-    return close;
+    return true;
 }

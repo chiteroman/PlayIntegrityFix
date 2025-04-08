@@ -6,12 +6,12 @@
 #include <cerrno>
 #include <filesystem>
 #include <sys/stat.h>
-#include "xdl.h"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "PIF", __VA_ARGS__)
 
-#define DEX_PATH "/data/adb/modules/playintegrityfix/classes.jar"
+#define TS_PATH "/data/adb/modules/tricky_store"
+
+#define DEX_PATH "/data/adb/modules/playintegrityfix/classes.dex"
 
 #define LIB_64 "/data/adb/modules/playintegrityfix/inject/arm64-v8a.so"
 #define LIB_32 "/data/adb/modules/playintegrityfix/inject/armeabi-v7a.so"
@@ -61,17 +61,37 @@ static bool copyFile(const std::string &from, const std::string &to, mode_t perm
            );
 }
 
+static bool checkOtaZip() {
+    std::array<char, 256> buffer{};
+    std::string result;
+    bool found = false;
+
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(
+            popen("unzip -l /system/etc/security/otacerts.zip", "r"), pclose);
+    if (!pipe) return false;
+
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+        if (result.find("testkey") != std::string::npos) {
+            found = true;
+            break;
+        }
+    }
+
+    return found;
+}
+
 static void companion(int fd) {
     bool ok = true;
 
-    int length = 0;
-    xread(fd, &length, sizeof(int));
+    int size = 0;
+    xread(fd, &size, sizeof(int));
 
     std::string dir;
-    dir.resize(length + 1);
-    auto bytes = xread(fd, dir.data(), length);
+    dir.resize(size);
+    auto bytes = xread(fd, dir.data(), size);
     dir.resize(bytes);
-    dir[bytes - 1] = '\0';
+    dir.shrink_to_fit();
 
     LOGD("[COMPANION] GMS dir: %s", dir.c_str());
 
@@ -84,7 +104,7 @@ static void companion(int fd) {
 
     LOGD("[COMPANION] copied inject lib");
 
-    auto dexFile = dir + "/classes.jar";
+    auto dexFile = dir + "/classes.dex";
     ok &= copyFile(DEX_PATH, dexFile, 0644);
 
     LOGD("[COMPANION] copied dex");
@@ -99,6 +119,15 @@ static void companion(int fd) {
     }
 
     LOGD("[COMPANION] copied json");
+
+    std::string ts(TS_PATH);
+    bool trickyStore = std::filesystem::exists(ts) &&
+                       !std::filesystem::exists(ts + "/disable") &&
+                       !std::filesystem::exists(ts + "/remove");
+    xwrite(fd, &trickyStore, sizeof(bool));
+
+    bool testSignedRom = checkOtaZip();
+    xwrite(fd, &testSignedRom, sizeof(bool));
 
     xwrite(fd, &ok, sizeof(bool));
 }
@@ -146,10 +175,14 @@ public:
 
         auto fd = api->connectCompanion();
 
-        int size = static_cast<int>(dir.length());
+        int size = static_cast<int>(dir.size());
         xwrite(fd, &size, sizeof(int));
 
         xwrite(fd, dir.data(), size);
+
+        xread(fd, &trickyStore, sizeof(bool));
+
+        xread(fd, &testSignedRom, sizeof(bool));
 
         bool ok = false;
         xread(fd, &ok, sizeof(bool));
@@ -164,17 +197,22 @@ public:
         if (gmsDir.empty())
             return;
 
-        typedef bool (*InitFuncPtr)(JavaVM *, const std::string &);
+        typedef bool (*InitFuncPtr)(JavaVM *, const std::string &, bool, bool);
 
-        auto handle = xdl_open((gmsDir + "/libinject.so").c_str(), XDL_DEFAULT);
-        auto init_func = reinterpret_cast<InitFuncPtr>(xdl_sym(handle, "init", nullptr));
+        void *handle = dlopen((gmsDir + "/libinject.so").c_str(), RTLD_NOW);
+
+        if (!handle)
+            return;
+
+        auto init_func = reinterpret_cast<InitFuncPtr>(dlsym(handle, "init"));
 
         JavaVM *vm = nullptr;
         env->GetJavaVM(&vm);
 
-        init_func(vm, gmsDir);
-
-        xdl_close(handle);
+        if (init_func(vm, gmsDir, trickyStore, testSignedRom)) {
+            LOGD("dlclose injected lib");
+            dlclose(handle);
+        }
     }
 
     void preServerSpecialize(ServerSpecializeArgs *args) override {
@@ -185,6 +223,8 @@ private:
     Api *api = nullptr;
     JNIEnv *env = nullptr;
     std::string gmsDir;
+    bool trickyStore = false;
+    bool testSignedRom = false;
 };
 
 REGISTER_ZYGISK_MODULE(PlayIntegrityFix)

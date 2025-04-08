@@ -9,7 +9,3 @@ find_package(cxx REQUIRED CONFIG)
 link_libraries(cxx::cxx)
 
 add_library(zygisk SHARED zygisk.cpp)
-
-add_subdirectory(xdl)
-
-target_link_libraries(zygisk PRIVATE xdl)

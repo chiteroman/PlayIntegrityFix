@@ -1,7 +1,6 @@
 id=playintegrityfix
-name=Play Integrity Fix
-version=v18.9
-versionCode=18900
+name=Play Integrity Fix [INJECT]
+version=v3-inject
+versionCode=3
 author=chiteroman
 description=Universal modular fix for Play Integrity (and SafetyNet) on devices running Android 8-15
-updateJson=https://raw.githubusercontent.com/chiteroman/PlayIntegrityFix/main/update.json

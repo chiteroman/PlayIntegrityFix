@@ -1,5 +1,5 @@
 plugins {
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.android.application)
 }
 
 android {
@@ -53,9 +53,7 @@ android {
         release {
             isMinifyEnabled = true
             multiDexEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            )
+            proguardFiles += file("proguard-rules.pro")
         }
     }
 

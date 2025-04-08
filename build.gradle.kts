@@ -1,5 +1,6 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
+    alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
 }
 
@@ -11,8 +12,8 @@ tasks.register("copyZygiskFiles") {
         val zygiskBuildDir = zygiskModule.layout.buildDirectory.get().asFile
 
         val classesJar = zygiskBuildDir
-            .resolve("intermediates/aar_main_jar/release/syncReleaseLibJars/classes.jar")
-        classesJar.copyTo(moduleFolder.resolve("classes.jar"), overwrite = true)
+            .resolve("intermediates/dex/release/minifyReleaseWithR8/classes.dex")
+        classesJar.copyTo(moduleFolder.resolve("classes.dex"), overwrite = true)
 
         val zygiskSoDir = zygiskBuildDir
             .resolve("intermediates/stripped_native_libs/release/stripReleaseDebugSymbols/out/lib")
