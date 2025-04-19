@@ -5,6 +5,14 @@ MODDIR=/data/adb/modules/playintegrityfix
 version=$(grep "^version=" $MODDIR/module.prop | sed 's/version=//g')
 FORCE_PREVIEW=1
 
+# lets try to use tmpfs for processing
+TEMPDIR="$MODDIR/temp" #fallback
+[ -w /sbin ] && TEMPDIR="/sbin/playintegrityfix"
+[ -w /debug_ramdisk ] && TEMPDIR="/debug_ramdisk/playintegrityfix"
+[ -w /dev ] && TEMPDIR="/dev/playintegrityfix"
+mkdir -p "$TEMPDIR"
+cd "$TEMPDIR"
+
 echo "[+] PlayIntegrityFix $version"
 echo "[+] $(basename "$0")"
 printf "\n\n"
@@ -20,6 +28,8 @@ sleep_pause() {
 download_fail() {
 	dl_domain=$(echo "$1" | awk -F[/:] '{print $4}')
 	echo "$1" | grep -q "\.zip$" && return
+	# Clean up on download fail
+	rm -rf "$TEMPDIR"
 	ping -c 1 -W 5 "$dl_domain" > /dev/null 2>&1 || {
 		echo "[!] Unable to connect to $dl_domain, please check your internet connection and try again"
 		sleep_pause
@@ -51,14 +61,6 @@ set_random_beta() {
 	MODEL=$(echo "$MODEL_LIST" | sed -n "$((rand_index + 1))p")
 	PRODUCT=$(echo "$PRODUCT_LIST" | sed -n "$((rand_index + 1))p")
 }
-
-# lets try to use tmpfs for processing
-TEMPDIR="$MODDIR/temp" #fallback
-[ -w /sbin ] && TEMPDIR="/sbin/playintegrityfix"
-[ -w /debug_ramdisk ] && TEMPDIR="/debug_ramdisk/playintegrityfix"
-[ -w /dev ] && TEMPDIR="/dev/playintegrityfix"
-mkdir -p "$TEMPDIR"
-cd "$TEMPDIR"
 
 # Get latest Pixel Beta information
 download https://developer.android.com/about/versions PIXEL_VERSIONS_HTML
@@ -92,6 +94,12 @@ echo "$MODEL ($PRODUCT)"
 (ulimit -f 2; download "$(echo "$OTA_LIST" | grep "$PRODUCT")" PIXEL_ZIP_METADATA) >/dev/null 2>&1
 FINGERPRINT="$(strings PIXEL_ZIP_METADATA | grep -am1 'post-build=' | cut -d= -f2)"
 SECURITY_PATCH="$(strings PIXEL_ZIP_METADATA | grep -am1 'security-patch-level=' | cut -d= -f2)"
+
+# Validate required field to prevent empty pif.json
+if [ -z "$FINGERPRINT" ] || [ -z "$SECURITY_PATCH" ]; then
+	# link to download pixel rom metadata that skipped connection check due to ulimit
+	download_fail "https://dl.google.com"
+fi
 
 echo "- Dumping values to pif.json ..."
 cat <<EOF | tee pif.json
