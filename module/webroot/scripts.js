@@ -21,6 +21,7 @@ function applyButtonEventListeners() {
     const fetchButton = document.getElementById('fetch');
     const previewFpToggle = document.getElementById('preview-fp-toggle-container');
     const clearButton = document.querySelector('.clear-terminal');
+    const terminal = document.querySelector('.output-terminal-content');
 
     fetchButton.addEventListener('click', runAction);
     previewFpToggle.addEventListener('click', async () => {
@@ -34,14 +35,12 @@ function applyButtonEventListeners() {
             console.error('Failed to switch fingerprint type:', error);
         }
     });
+
     clearButton.addEventListener('click', () => {
-        const output = document.querySelector('.output-terminal-content');
-        output.innerHTML = '';
+        terminal.innerHTML = '';
         currentFontSize = 14;
         updateFontSize(currentFontSize);
     });
-
-    const terminal = document.querySelector('.output-terminal-content');
     
     terminal.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
@@ -49,7 +48,6 @@ function applyButtonEventListeners() {
             initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
         }
     }, { passive: false });
-
     terminal.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2) {
             e.preventDefault();
@@ -66,7 +64,6 @@ function applyButtonEventListeners() {
             initialPinchDistance = currentDistance;
         }
     }, { passive: false });
-
     terminal.addEventListener('touchend', () => {
         initialPinchDistance = null;
     });
@@ -147,11 +144,29 @@ async function runAction() {
     actionRunning = false;
 }
 
-// Function to apply ripple effect
+/**
+ * Simulate MD3 ripple animation
+ * Usage: class="ripple-element" style="position: relative; overflow: hidden;"
+ * Note: Require background-color to work properly
+ * @return {void}
+ */
 function applyRippleEffect() {
     document.querySelectorAll('.ripple-element').forEach(element => {
         if (element.dataset.rippleListener !== "true") {
-            element.addEventListener("pointerdown", function (event) {
+            element.addEventListener("pointerdown", async (event) => {
+                // Pointer up event
+                const handlePointerUp = () => {
+                    ripple.classList.add("end");
+                    setTimeout(() => {
+                        ripple.classList.remove("end");
+                        ripple.remove();
+                    }, duration * 1000);
+                    element.removeEventListener("pointerup", handlePointerUp);
+                    element.removeEventListener("pointercancel", handlePointerUp);
+                };
+                element.addEventListener("pointerup", handlePointerUp);
+                element.addEventListener("pointercancel", handlePointerUp);
+
                 const ripple = document.createElement("span");
                 ripple.classList.add("ripple");
 
@@ -176,7 +191,6 @@ function applyRippleEffect() {
                 // Adaptive color
                 const computedStyle = window.getComputedStyle(element);
                 const bgColor = computedStyle.backgroundColor || "rgba(0, 0, 0, 0)";
-                const textColor = computedStyle.color;
                 const isDarkColor = (color) => {
                     const rgb = color.match(/\d+/g);
                     if (!rgb) return false;
@@ -185,19 +199,8 @@ function applyRippleEffect() {
                 };
                 ripple.style.backgroundColor = isDarkColor(bgColor) ? "rgba(255, 255, 255, 0.2)" : "";
 
-                // Append ripple and handle cleanup
+                // Append ripple
                 element.appendChild(ripple);
-                const handlePointerUp = () => {
-                    ripple.classList.add("end");
-                    setTimeout(() => {
-                        ripple.classList.remove("end");
-                        ripple.remove();
-                    }, duration * 1000);
-                    element.removeEventListener("pointerup", handlePointerUp);
-                    element.removeEventListener("pointercancel", handlePointerUp);
-                };
-                element.addEventListener("pointerup", handlePointerUp);
-                element.addEventListener("pointercancel", handlePointerUp);
             });
             element.dataset.rippleListener = "true";
         }
@@ -213,27 +216,6 @@ async function checkMMRL() {
         } catch (error) {
             console.log("Error setting status bars theme:", error)
         }
-
-        // Request API permission, supported version: 33045+
-        try {
-            $playintegrityfix.requestAdvancedKernelSUAPI();
-        } catch (error) {
-            console.log("Error requesting API:", error);
-        }
-        try {
-            await execCommand("whoami");
-        } catch (error) {
-            appendToOutput("");
-            appendToOutput("[!] Please allow permission in MMRL settings");
-            appendToOutput("[-] Settings");
-            appendToOutput("[-] Security");
-            appendToOutput("[-] Allow JavaScript API");
-            appendToOutput("[-] Play Integrity Fix");
-            appendToOutput("[-] Enable Allow Advanced KernelSU API");
-            appendToOutput("");
-        }
-    } else {
-        console.log("Not running in MMRL environment.");
     }
 }
 
