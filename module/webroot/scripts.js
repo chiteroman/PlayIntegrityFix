@@ -1,19 +1,77 @@
-let actionRunning = false;
+let shellRunning = false;
 let initialPinchDistance = null;
 let currentFontSize = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 24;
 
-// Execute shell commands with ksu.exec
-async function execCommand(command) {
-    const callbackName = `exec_callback_${Date.now()}`;
+/**
+ * Executes a shell command with KernelSU privileges
+ * @param {string} command - The shell command to execute
+ * @returns {Promise<string>} A promise that resolves with stdout content
+ * @throws {Error} If command execution fails with:
+ *   - Non-zero exit code (includes stderr in error message)
+ */
+function exec(command) {
     return new Promise((resolve, reject) => {
-        window[callbackName] = (errno, stdout, stderr) => {
-            delete window[callbackName];
-            errno === 0 ? resolve(stdout) : reject(stderr);
+        const callbackFuncName = `exec_callback_${Date.now()}`;
+        window[callbackFuncName] = (errno, stdout, stderr) => {
+            delete window[callbackFuncName];
+            if (errno !== 0) {
+                reject(new Error(`Command failed with exit code ${errno}: ${stderr}`));
+                return;
+            }
+            resolve(stdout);
         };
-        ksu.exec(command, "{}", callbackName);
+        try {
+            ksu.exec(command, "{}", callbackFuncName);
+        } catch (error) {
+            delete window[callbackFuncName];
+            reject(error);
+        }
     });
+}
+
+/**
+ * Spawns shell process with ksu spawn
+ * @param {string} command - The command to execute
+ * @param {string[]} [args=[]] - Array of arguments to pass to the command
+ * @returns {Object} A child process object with:
+ *   - stdout: Stream for standard output
+ *   - stderr: Stream for standard error
+ *   - stdin: Stream for standard input
+ *   - on(event, listener): Attach event listener ('exit', 'error')
+ *   - emit(event, ...args): Emit events internally
+ */
+function spawn(command, args = []) {
+    const child = {
+        listeners: {},
+        stdout: { listeners: {} },
+        stderr: { listeners: {} },
+        stdin: { listeners: {} },
+        on: function(event, listener) {
+            if (!this.listeners[event]) this.listeners[event] = [];
+            this.listeners[event].push(listener);
+        },
+        emit: function(event, ...args) {
+            if (this.listeners[event]) {
+                this.listeners[event].forEach(listener => listener(...args));
+            }
+        }
+    };
+    ['stdout', 'stderr', 'stdin'].forEach(io => {
+        child[io].on = child.on.bind(child[io]);
+        child[io].emit = child.emit.bind(child[io]);
+    });
+    const callbackName = `spawn_callback_${Date.now()}`;
+    window[callbackName] = child;
+    child.on("exit", () => delete window[callbackName]);
+    try {
+        ksu.spawn(command, JSON.stringify(args), "{}", callbackName);
+    } catch (error) {
+        child.emit("error", error);
+        delete window[callbackName];
+    }
+    return child;
 }
 
 // Apply button event listeners
@@ -25,15 +83,18 @@ function applyButtonEventListeners() {
 
     fetchButton.addEventListener('click', runAction);
     previewFpToggle.addEventListener('click', async () => {
+        if (shellRunning) return;
+        shellRunning = true;
         try {
             const isChecked = document.getElementById('toggle-preview-fp').checked;
-            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${isChecked ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
+            await exec(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${isChecked ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
             appendToOutput(`[+] Switched fingerprint to ${isChecked ? 'beta' : 'preview'}`);
             loadPreviewFingerprintConfig();
         } catch (error) {
             appendToOutput("[!] Failed to switch fingerprint type");
             console.error('Failed to switch fingerprint type:', error);
         }
+        shellRunning = false;
     });
 
     clearButton.addEventListener('click', () => {
@@ -73,7 +134,7 @@ function applyButtonEventListeners() {
 async function loadVersionFromModuleProp() {
     const versionElement = document.getElementById('version-text');
     try {
-        const version = await execCommand("grep '^version=' /data/adb/modules/playintegrityfix/module.prop | cut -d'=' -f2");
+        const version = await exec("grep '^version=' /data/adb/modules/playintegrityfix/module.prop | cut -d'=' -f2");
         versionElement.textContent = version.trim();
     } catch (error) {
         appendToOutput("[!] Failed to read version from module.prop");
@@ -85,7 +146,7 @@ async function loadVersionFromModuleProp() {
 async function loadPreviewFingerprintConfig() {
     try {
         const previewFpToggle = document.getElementById('toggle-preview-fp');
-        const isChecked = await execCommand(`grep -o 'FORCE_PREVIEW=[01]' /data/adb/modules/playintegrityfix/action.sh | cut -d'=' -f2`);
+        const isChecked = await exec(`grep -o 'FORCE_PREVIEW=[01]' /data/adb/modules/playintegrityfix/action.sh | cut -d'=' -f2`);
         if (isChecked === '0') {
             previewFpToggle.checked = false;
         } else {
@@ -106,42 +167,28 @@ function appendToOutput(content) {
     } else {
         const line = document.createElement('p');
         line.className = 'output-content';
-        line.textContent = content;
+        line.innerHTML = content.replace(/ /g, '&nbsp;');
         output.appendChild(line);
     }
     output.scrollTop = output.scrollHeight;
 }
 
 // Function to run the script and display its output
-async function runAction() {
-    if (actionRunning) return;
-    actionRunning = true;
-    try {
-        appendToOutput("[+] Fetching pif.json...");
-        await new Promise(resolve => setTimeout(resolve, 200));
-        const scriptOutput = await execCommand("sh /data/adb/modules/playintegrityfix/action.sh");
-        const lines = scriptOutput.split('\n');
-        lines.forEach(line => {
-            appendToOutput(line)
-        });
+function runAction() {
+    if (shellRunning) return;
+    shellRunning = true;
+    const scriptOutput = spawn("sh", ["/data/adb/modules/playintegrityfix/action.sh"]);
+    scriptOutput.stdout.on('data', (data) => appendToOutput(data));
+    scriptOutput.stderr.on('data', (data) => appendToOutput(data));
+    scriptOutput.on('exit', () => {
         appendToOutput("");
-    } catch (error) {
-        console.error('Script execution failed:', error);
-        if (typeof ksu !== 'undefined' && ksu.mmrl) {
-            appendToOutput("");
-            appendToOutput("[!] Please allow permission in MMRL settings");
-            appendToOutput("[-] Settings");
-            appendToOutput("[-] Security");
-            appendToOutput("[-] Allow JavaScript API");
-            appendToOutput("[-] Play Integrity Fix");
-            appendToOutput("[-] Enable Allow Advanced KernelSU API");
-            appendToOutput("");
-        } else {
-            appendToOutput("[!] Error: Fail to execute action.sh");
-            appendToOutput("");
-        }
-    }
-    actionRunning = false;
+        shellRunning = false;
+    });
+    scriptOutput.on('error', () => {
+        appendToOutput("[!] Error: Fail to execute action.sh");
+        appendToOutput("");
+        shellRunning = false;
+    });
 }
 
 /**
