@@ -202,8 +202,8 @@ input:checked+.slider:before {
     width: 100%;
     padding: 0;
     margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
+    word-wrap: break-word;
+    word-break: break-all;
 }
 
 .ripple-element {
