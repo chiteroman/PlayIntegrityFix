@@ -19,13 +19,13 @@ import java.security.KeyStore;
 import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.Security;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class EntryPoint {
     public static final String TAG = "PIF";
-    private static final Map<Field, String> map = new HashMap<>();
+    private static final Map<Field, String> map = new ConcurrentHashMap<>();
     private static final String signatureData = """
             MIIFyTCCA7GgAwIBAgIVALyxxl+zDS9SL68SzOr48309eAZyMA0GCSqGSIb3DQEBCwUAMHQxCzAJ
             BgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRQw
@@ -59,13 +59,13 @@ public final class EntryPoint {
     private static void spoofProvider() {
         try {
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-            Field keyStoreSpi = keyStore.getClass().getDeclaredField("keyStoreSpi");
+            Field keyStoreSpiField = keyStore.getClass().getDeclaredField("keyStoreSpi");
 
-            keyStoreSpi.setAccessible(true);
+            keyStoreSpiField.setAccessible(true);
 
-            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) keyStoreSpi.get(keyStore);
+            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) keyStoreSpiField.get(keyStore);
 
-            keyStoreSpi.setAccessible(false);
+            keyStoreSpiField.setAccessible(false);
 
         } catch (Throwable t) {
             Log.e(TAG, "Couldn't get keyStoreSpi field!", t);
@@ -178,6 +178,7 @@ public final class EntryPoint {
             return;
         }
 
+        map.clear();
         jsonObject.keys().forEachRemaining(key -> {
             Field field = getBuildField(key);
             if (field == null) return;
