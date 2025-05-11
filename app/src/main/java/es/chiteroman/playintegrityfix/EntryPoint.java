@@ -54,7 +54,7 @@ public final class EntryPoint {
             fRJ2OmzXmML9NgHTjEiJR2Ib2iNrMKxkuTIs9oxKZgrJtJKvdU9qJJKM5PnZuNuHhGs6A/9gt9Oc
             cetYeQvVSqeEmQluWfcunQn9C9Vwi2BJIiVJh4IdWZf5/e2PlSSQ9CJjz2bKI17pzdxOmjQfE0JS
             F7Xt
-            """""";
+            """;
 
     private static void spoofProvider() {
         try {
@@ -72,10 +72,6 @@ public final class EntryPoint {
         }
 
         Provider provider = Security.getProvider("AndroidKeyStore");
-        if (provider == null) {
-            Log.e(TAG, "AndroidKeyStore provider not found!");
-            return;
-        }
 
         Provider customProvider = new CustomProvider(provider);
 
@@ -115,10 +111,8 @@ public final class EntryPoint {
         try {
             Field creatorsField = findField(Parcel.class, "mCreators");
             creatorsField.setAccessible(true);
-            Object mCreatorsObj = creatorsField.get(null);
-            if (mCreatorsObj instanceof Map) {
-                ((Map<?, ?>) mCreatorsObj).clear();
-            }
+            Map<?, ?> mCreators = (Map<?, ?>) creatorsField.get(null);
+            if (mCreators != null) mCreators.clear();
         } catch (Exception e) {
             Log.e(TAG, "Couldn't clear Parcel mCreators: " + e);
         }
@@ -126,17 +120,14 @@ public final class EntryPoint {
         try {
             Field creatorsField = findField(Parcel.class, "sPairedCreators");
             creatorsField.setAccessible(true);
-            Object sPairedCreatorsObj = creatorsField.get(null);
-            if (sPairedCreatorsObj instanceof Map) {
-                ((Map<?, ?>) sPairedCreatorsObj).clear();
-            }
+            Map<?, ?> sPairedCreators = (Map<?, ?>) creatorsField.get(null);
+            if (sPairedCreators != null) sPairedCreators.clear();
         } catch (Exception e) {
             Log.e(TAG, "Couldn't clear Parcel sPairedCreators: " + e);
         }
     }
 
-    private static Field findField(Class<?> clazz, String fieldName) throws NoSuchFieldException {
-        Class<?> currentClass = clazz;
+    private static Field findField(Class<?> currentClass, String fieldName) throws NoSuchFieldException {
         while (currentClass != null && !currentClass.equals(Object.class)) {
             try {
                 return currentClass.getDeclaredField(fieldName);
@@ -144,7 +135,7 @@ public final class EntryPoint {
                 currentClass = currentClass.getSuperclass();
             }
         }
-        throw new NoSuchFieldException("Field '" + fieldName + "' not found in class hierarchy of " + clazz.getName());
+        throw new NoSuchFieldException("Field '" + fieldName + "' not found in class hierarchy of " + Objects.requireNonNull(currentClass).getName());
     }
 
     private static Field getBuildField(String name) {
@@ -161,14 +152,14 @@ public final class EntryPoint {
         return field;
     }
 
-    public static void init(String json, boolean shouldSpoofProvider, boolean shouldSpoofSignature) {
-        if (shouldSpoofProvider) {
+    public static void init(String json, boolean spoofProvider, boolean spoofSignature) {
+        if (spoofProvider) {
             spoofProvider();
         } else {
             Log.i(TAG, "Don't spoof Provider");
         }
 
-        if (shouldSpoofSignature) {
+        if (spoofSignature) {
             spoofSignature();
         } else {
             Log.i(TAG, "Don't spoof signature");
@@ -183,7 +174,7 @@ public final class EntryPoint {
         try {
             jsonObject = new JSONObject(json);
         } catch (Throwable t) {
-            Log.e(TAG, "init: Failed to parse JSON", t);
+            Log.e(TAG, "init", t);
             return;
         }
 
@@ -193,13 +184,13 @@ public final class EntryPoint {
             if (field == null) return;
             try {
                 String value = jsonObject.getString(key);
-                if (value == null || value.isEmpty()) {
-                    Log.w(TAG, "Field '" + key + "' has an empty value!");
+                if (value.isBlank()) {
+                    Log.w(TAG, "Field '" + key + "' have an empty value!");
                 } else {
                     map.put(field, value);
                 }
             } catch (Throwable t) {
-                Log.e(TAG, "init: Error processing key '" + key + "'", t);
+                Log.e(TAG, "init", t);
             }
         });
 
@@ -221,7 +212,7 @@ public final class EntryPoint {
                 field.setAccessible(false);
                 Log.i(TAG, "Set '" + field.getName() + "' to '" + value + "'");
             } catch (Throwable t) {
-                Log.e(TAG, "spoofFields: Error setting field '" + field.getName() + "'", t);
+                Log.e(TAG, "spoofFields", t);
             }
         });
     }
