@@ -22,6 +22,7 @@ static ssize_t xread(int fd, void *buffer, size_t count) {
     while (count > 0) {
         ssize_t ret = TEMP_FAILURE_RETRY(read(fd, buf, count));
         if (ret < 0) return -1;
+        if (ret == 0 && count > 0) break;
         buf += ret;
         total += ret;
         count -= ret;
@@ -157,9 +158,14 @@ public:
 
         if (jsonSize > 0) {
             jsonStr.resize(jsonSize);
-            jsonSize = xread(fd, jsonStr.data(), jsonSize);
-            jsonStr[jsonSize] = '\0';
-            json = nlohmann::json::parse(jsonStr, nullptr, false, true);
+            ssize_t actualJsonRead = xread(fd, jsonStr.data(), jsonSize);
+            if (actualJsonRead > 0 && (size_t)actualJsonRead <= jsonSize) {
+                jsonStr[actualJsonRead] = '\0';
+                json = nlohmann::json::parse(jsonStr.c_str(), nullptr, false, true);
+            } else {
+                 LOGE("Failed to read JSON data or JSON data is empty.");
+                 jsonSize = 0;
+            }
         }
 
         bool trickyStore = false;
@@ -188,7 +194,15 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty() || json.empty()) return;
+        if (dexVector.empty() || json.empty()) {
+            LOGD("Dex or JSON data is empty for GMS unstable, unloading module.");
+            dlclose();
+
+            json.clear();
+            dexVector.clear();
+            dexVector.shrink_to_fit();
+            return;
+        }
 
         UpdateBuildFields();
 
