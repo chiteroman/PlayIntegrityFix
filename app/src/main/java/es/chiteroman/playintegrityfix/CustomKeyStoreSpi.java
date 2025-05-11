@@ -28,8 +28,8 @@ public final class CustomKeyStoreSpi extends KeyStoreSpi {
     public Certificate[] engineGetCertificateChain(String alias) {
         for (StackTraceElement stackTraceElement : Thread.currentThread().getStackTrace()) {
             if (stackTraceElement.getClassName().toLowerCase(Locale.US).contains("droidguard")) {
-                Log.w(EntryPoint.TAG, "DroidGuard invoke engineGetCertificateChain! Throwing exception...");
-                throw new UnsupportedOperationException();
+                Log.w(EntryPoint.TAG, "DroidGuard invoke engineGetCertificateChain! Returning null.");
+                return null;
             }
         }
         return keyStoreSpi.engineGetCertificateChain(alias);
