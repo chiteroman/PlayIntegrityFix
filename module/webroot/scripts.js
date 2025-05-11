@@ -4,13 +4,6 @@ let currentFontSize = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 24;
 
-/**
- * Executes a shell command with KernelSU privileges
- * @param {string} command - The shell command to execute
- * @returns {Promise<string>} A promise that resolves with stdout content
- * @throws {Error} If command execution fails with:
- *   - Non-zero exit code (includes stderr in error message)
- */
 function exec(command) {
     return new Promise((resolve, reject) => {
         const callbackFuncName = `exec_callback_${Date.now()}`;
@@ -31,17 +24,6 @@ function exec(command) {
     });
 }
 
-/**
- * Spawns shell process with ksu spawn
- * @param {string} command - The command to execute
- * @param {string[]} [args=[]] - Array of arguments to pass to the command
- * @returns {Object} A child process object with:
- *   - stdout: Stream for standard output
- *   - stderr: Stream for standard error
- *   - stdin: Stream for standard input
- *   - on(event, listener): Attach event listener ('exit', 'error')
- *   - emit(event, ...args): Emit events internally
- */
 function spawn(command, args = []) {
     const child = {
         listeners: {},
@@ -74,22 +56,23 @@ function spawn(command, args = []) {
     return child;
 }
 
-// Apply button event listeners
 function applyButtonEventListeners() {
     const fetchButton = document.getElementById('fetch');
-    const previewFpToggle = document.getElementById('preview-fp-toggle-container');
+    const previewFpToggleContainer = document.getElementById('preview-fp-toggle-container');
     const clearButton = document.querySelector('.clear-terminal');
     const terminal = document.querySelector('.output-terminal-content');
 
     fetchButton.addEventListener('click', runAction);
-    previewFpToggle.addEventListener('click', async () => {
+    previewFpToggleContainer.addEventListener('click', async () => {
         if (shellRunning) return;
         shellRunning = true;
+        const toggleInput = document.getElementById('toggle-preview-fp');
+        const isCheckedAfterClick = !toggleInput.checked;
+
         try {
-            const isChecked = document.getElementById('toggle-preview-fp').checked;
-            await exec(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${isChecked ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
-            appendToOutput(`[+] Switched fingerprint to ${isChecked ? 'beta' : 'preview'}`);
-            loadPreviewFingerprintConfig();
+            await exec(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${isCheckedAfterClick ? 1 : 0}/' /data/adb/modules/playintegrityfix/action.sh`);
+            appendToOutput(`[+] Switched fingerprint to ${isCheckedAfterClick ? 'preview' : 'beta'}`);
+            toggleInput.checked = isCheckedAfterClick;
         } catch (error) {
             appendToOutput("[!] Failed to switch fingerprint type");
             console.error('Failed to switch fingerprint type:', error);
@@ -102,7 +85,7 @@ function applyButtonEventListeners() {
         currentFontSize = 14;
         updateFontSize(currentFontSize);
     });
-    
+
     terminal.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
             e.preventDefault();
@@ -113,7 +96,7 @@ function applyButtonEventListeners() {
         if (e.touches.length === 2) {
             e.preventDefault();
             const currentDistance = getDistance(e.touches[0], e.touches[1]);
-            
+
             if (initialPinchDistance === null) {
                 initialPinchDistance = currentDistance;
                 return;
@@ -130,7 +113,6 @@ function applyButtonEventListeners() {
     });
 }
 
-// Function to load the version from module.prop
 async function loadVersionFromModuleProp() {
     const versionElement = document.getElementById('version-text');
     try {
@@ -142,66 +124,59 @@ async function loadVersionFromModuleProp() {
     }
 }
 
-// Function to load preview fingerprint config
 async function loadPreviewFingerprintConfig() {
     try {
         const previewFpToggle = document.getElementById('toggle-preview-fp');
-        const isChecked = await exec(`grep -o 'FORCE_PREVIEW=[01]' /data/adb/modules/playintegrityfix/action.sh | cut -d'=' -f2`);
-        if (isChecked === '0') {
-            previewFpToggle.checked = false;
-        } else {
-            previewFpToggle.checked = true;
-        }
+        const forcePreviewValue = await exec(`grep -o 'FORCE_PREVIEW=[01]' /data/adb/modules/playintegrityfix/action.sh | cut -d'=' -f2`);
+        previewFpToggle.checked = (forcePreviewValue.trim() === '1');
+        previewFpToggle.disabled = false;
     } catch (error) {
         appendToOutput("[!] Failed to load preview fingerprint config");
         console.error("Failed to load preview fingerprint config:", error);
+        document.getElementById('toggle-preview-fp').disabled = true;
     }
 }
 
-// Function to append element in output terminal
 function appendToOutput(content) {
     const output = document.querySelector('.output-terminal-content');
+    if (typeof content !== 'string') {
+        content = String(content);
+    }
     if (content.trim() === "") {
         const lineBreak = document.createElement('br');
         output.appendChild(lineBreak);
     } else {
         const line = document.createElement('p');
         line.className = 'output-content';
-        line.innerHTML = content.replace(/ /g, '&nbsp;');
+        line.innerHTML = content.replace(/ /g, ' ');
         output.appendChild(line);
     }
     output.scrollTop = output.scrollHeight;
 }
 
-// Function to run the script and display its output
 function runAction() {
     if (shellRunning) return;
     shellRunning = true;
+    appendToOutput("[+] Running action.sh...");
     const scriptOutput = spawn("sh", ["/data/adb/modules/playintegrityfix/action.sh"]);
     scriptOutput.stdout.on('data', (data) => appendToOutput(data));
-    scriptOutput.stderr.on('data', (data) => appendToOutput(data));
-    scriptOutput.on('exit', () => {
+    scriptOutput.stderr.on('data', (data) => appendToOutput(`[stderr] ${data}`));
+    scriptOutput.on('exit', (code) => {
+        appendToOutput(`[+] action.sh finished with exit code ${code}.`);
         appendToOutput("");
         shellRunning = false;
     });
-    scriptOutput.on('error', () => {
-        appendToOutput("[!] Error: Fail to execute action.sh");
+    scriptOutput.on('error', (err) => {
+        appendToOutput(`[!] Error: Fail to execute action.sh: ${err.message || err}`);
         appendToOutput("");
         shellRunning = false;
     });
 }
 
-/**
- * Simulate MD3 ripple animation
- * Usage: class="ripple-element" style="position: relative; overflow: hidden;"
- * Note: Require background-color to work properly
- * @return {void}
- */
 function applyRippleEffect() {
     document.querySelectorAll('.ripple-element').forEach(element => {
         if (element.dataset.rippleListener !== "true") {
             element.addEventListener("pointerdown", async (event) => {
-                // Pointer up event
                 const handlePointerUp = () => {
                     ripple.classList.add("end");
                     setTimeout(() => {
@@ -217,36 +192,31 @@ function applyRippleEffect() {
                 const ripple = document.createElement("span");
                 ripple.classList.add("ripple");
 
-                // Calculate ripple size and position
                 const rect = element.getBoundingClientRect();
                 const width = rect.width;
                 const size = Math.max(rect.width, rect.height);
                 const x = event.clientX - rect.left - size / 2;
                 const y = event.clientY - rect.top - size / 2;
 
-                // Determine animation duration
                 let duration = 0.2 + (width / 800) * 0.4;
                 duration = Math.min(0.8, Math.max(0.2, duration));
 
-                // Set ripple styles
                 ripple.style.width = ripple.style.height = `${size}px`;
                 ripple.style.left = `${x}px`;
                 ripple.style.top = `${y}px`;
                 ripple.style.animationDuration = `${duration}s`;
                 ripple.style.transition = `opacity ${duration}s ease`;
 
-                // Adaptive color
                 const computedStyle = window.getComputedStyle(element);
                 const bgColor = computedStyle.backgroundColor || "rgba(0, 0, 0, 0)";
                 const isDarkColor = (color) => {
                     const rgb = color.match(/\d+/g);
                     if (!rgb) return false;
                     const [r, g, b] = rgb.map(Number);
-                    return (r * 0.299 + g * 0.587 + b * 0.114) < 96; // Luma formula
+                    return (r * 0.299 + g * 0.587 + b * 0.114) < 96;
                 };
                 ripple.style.backgroundColor = isDarkColor(bgColor) ? "rgba(255, 255, 255, 0.2)" : "";
 
-                // Append ripple
                 element.appendChild(ripple);
             });
             element.dataset.rippleListener = "true";
@@ -254,14 +224,16 @@ function applyRippleEffect() {
     });
 }
 
-// Function to check if running in MMRL
 async function checkMMRL() {
     if (typeof ksu !== 'undefined' && ksu.mmrl) {
-        // Set status bars theme based on device theme
         try {
-            $playintegrityfix.setLightStatusBars(!window.matchMedia('(prefers-color-scheme: dark)').matches)
+            if (typeof $playintegrityfix !== 'undefined' && typeof $playintegrityfix.setLightStatusBars === 'function') {
+                 $playintegrityfix.setLightStatusBars(!window.matchMedia('(prefers-color-scheme: dark)').matches);
+            } else {
+                console.log("$playintegrityfix or setLightStatusBars not available.");
+            }
         } catch (error) {
-            console.log("Error setting status bars theme:", error)
+            console.log("Error setting status bars theme:", error);
         }
     }
 }
