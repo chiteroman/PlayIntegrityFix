@@ -1,6 +1,16 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
+#include <filesystem>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <array>
+#include <memory>
+#include <cstdio>
+#include <string_view>
+#include <algorithm> 
+
 #include "zygisk.hpp"
 #include "dobby.h"
 #include "json.hpp"
@@ -32,7 +42,7 @@ static ssize_t xread(int fd, void *buffer, size_t count) {
 
 static ssize_t xwrite(int fd, const void *buffer, size_t count) {
     ssize_t total = 0;
-    char *buf = (char *) buffer;
+    const char *buf = static_cast<const char *>(buffer); // const_cast not needed for read-only buffer
     while (count > 0) {
         ssize_t ret = TEMP_FAILURE_RETRY(write(fd, buf, count));
         if (ret < 0) return -1;
@@ -159,13 +169,16 @@ public:
         if (jsonSize > 0) {
             jsonStr.resize(jsonSize);
             ssize_t actualJsonRead = xread(fd, jsonStr.data(), jsonSize);
-            if (actualJsonRead > 0 && (size_t)actualJsonRead <= jsonSize) {
-                jsonStr[actualJsonRead] = '\0';
-                json = nlohmann::json::parse(jsonStr.c_str(), nullptr, false, true);
+            if (actualJsonRead > 0) {
+                jsonStr.resize(actualJsonRead);
+                json = nlohmann::json::parse(jsonStr, nullptr, false, true);
+                if (json.is_discarded()) {
+                    LOGE("JSON parsing failed. Content was: %s", jsonStr.c_str());
+                    json = nlohmann::json();
+                }
             } else {
                  LOGE("Failed to read JSON data or JSON data is empty.");
-                 jsonSize = 0;
-            }
+                             }
         }
 
         bool trickyStore = false;
@@ -177,7 +190,7 @@ public:
         close(fd);
 
         LOGD("Dex file size: %zu", dexSize);
-        LOGD("Json file size: %zu", jsonSize);
+        LOGD("Json file size: %zu", json.empty() ? 0 : jsonStr.length());
 
         parseJSON();
 
@@ -196,8 +209,8 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         if (dexVector.empty() || json.empty()) {
             LOGD("Dex or JSON data is empty for GMS unstable, unloading module.");
-            dlclose();
-
+            dlcloseZygiskLib();
+            
             json.clear();
             dexVector.clear();
             dexVector.shrink_to_fit();
@@ -214,10 +227,10 @@ public:
 
         if (spoofProps) {
             if (!doHook()) {
-                dlclose();
+                dlcloseZygiskLib();
             }
         } else {
-            dlclose();
+            dlcloseZygiskLib();
         }
 
         json.clear();
@@ -239,13 +252,13 @@ private:
     bool spoofProvider = true;
     bool spoofSignature = false;
 
-    void dlclose() {
-        LOGD("dlclose zygisk lib");
+    void dlcloseZygiskLib() {
+        LOGD("Requesting Zygisk to dlclose module library");
         api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
     }
 
     void parseJSON() {
-        if (json.empty()) return;
+        if (json.empty() || json.is_discarded()) return;
 
         if (json.contains("DEVICE_INITIAL_SDK_INT")) {
             if (json["DEVICE_INITIAL_SDK_INT"].is_string()) {
@@ -282,13 +295,19 @@ private:
             std::string fingerprint = json["FINGERPRINT"].get<std::string>();
 
             std::vector<std::string> vector;
-            auto parts = fingerprint | std::views::split('/');
-
-            for (const auto &part: parts) {
-                auto subParts = std::string(part.begin(), part.end()) | std::views::split(':');
-                for (const auto &subPart: subParts) {
-                    vector.emplace_back(subPart.begin(), subPart.end());
+            std::string current_segment;
+            for (char c : fingerprint) {
+                if (c == '/' || c == ':') {
+                    if (!current_segment.empty()) {
+                        vector.push_back(current_segment);
+                    }
+                    current_segment.clear();
+                } else {
+                    current_segment += c;
                 }
+            }
+            if (!current_segment.empty()) {
+                vector.push_back(current_segment);
             }
 
             if (vector.size() == 8) {
@@ -301,7 +320,7 @@ private:
                 json["TYPE"] = vector[6];
                 json["TAGS"] = vector[7];
             } else {
-                LOGE("Error parsing fingerprint values!");
+                LOGE("Error parsing fingerprint values! Expected 8 segments, got %zu", vector.size());
             }
         }
 
@@ -324,6 +343,7 @@ private:
         if (env->ExceptionCheck()) {
             env->ExceptionDescribe();
             env->ExceptionClear();
+            env->DeleteLocalRef(clClass);
             return;
         }
 
@@ -338,6 +358,9 @@ private:
         if (env->ExceptionCheck()) {
             env->ExceptionDescribe();
             env->ExceptionClear();
+            env->DeleteLocalRef(clClass);
+            env->DeleteLocalRef(dexClClass);
+            env->DeleteLocalRef(buffer);
             return;
         }
 
@@ -346,17 +369,24 @@ private:
                                           "(Ljava/lang/String;)Ljava/lang/Class;");
         auto entryClassName = env->NewStringUTF("es.chiteroman.playintegrityfix.EntryPoint");
         auto entryClassObj = env->CallObjectMethod(dexCl, loadClass, entryClassName);
-        auto entryPointClass = (jclass) entryClassObj;
-
-        if (env->ExceptionCheck()) {
-            env->ExceptionDescribe();
+        
+        if (env->ExceptionCheck() || entryClassObj == nullptr) {
+            if(env->ExceptionCheck()) env->ExceptionDescribe();
             env->ExceptionClear();
+            LOGE("Failed to load EntryPoint class");
+            env->DeleteLocalRef(clClass);
+            env->DeleteLocalRef(dexClClass);
+            env->DeleteLocalRef(buffer);
+            env->DeleteLocalRef(dexCl);
+            env->DeleteLocalRef(entryClassName);
             return;
         }
+        auto entryPointClass = (jclass) entryClassObj;
 
         LOGD("call init");
         auto entryInit = env->GetStaticMethodID(entryPointClass, "init", "(Ljava/lang/String;ZZ)V");
-        auto jsonStr = env->NewStringUTF(json.dump().c_str());
+        std::string json_dump_str = json.dump();
+        auto jsonStr = env->NewStringUTF(json_dump_str.c_str());
         env->CallStaticVoidMethod(entryPointClass, entryInit, jsonStr, spoofProvider,
                                   spoofSignature);
 
@@ -377,59 +407,75 @@ private:
     }
 
     void UpdateBuildFields() {
+        if (json.empty() || json.is_discarded()) return;
+
         jclass buildClass = env->FindClass("android/os/Build");
+        if (env->ExceptionCheck() || buildClass == nullptr) {
+            if(env->ExceptionCheck()) env->ExceptionDescribe();
+            env->ExceptionClear();
+            LOGE("Failed to find android.os.Build class");
+            return;
+        }
+
         jclass versionClass = env->FindClass("android/os/Build$VERSION");
+        if (env->ExceptionCheck() || versionClass == nullptr) {
+            if(env->ExceptionCheck()) env->ExceptionDescribe();
+            env->ExceptionClear();
+            LOGE("Failed to find android.os.Build$VERSION class");
+            env->DeleteLocalRef(buildClass);
+            return;
+        }
 
         for (auto &[key, val]: json.items()) {
             if (!val.is_string()) continue;
 
             const char *fieldName = key.c_str();
-
-            jfieldID fieldID = env->GetStaticFieldID(buildClass, fieldName, "Ljava/lang/String;");
-
+            jfieldID fieldID = nullptr;
+            
+            fieldID = env->GetStaticFieldID(buildClass, fieldName, "Ljava/lang/String;");
             if (env->ExceptionCheck()) {
                 env->ExceptionClear();
-
                 fieldID = env->GetStaticFieldID(versionClass, fieldName, "Ljava/lang/String;");
-
                 if (env->ExceptionCheck()) {
                     env->ExceptionClear();
+                    LOGD("Field %s not found in Build or Build.VERSION", fieldName);
                     continue;
                 }
             }
 
             if (fieldID != nullptr) {
-                std::string str = val.get<std::string>();
-                const char *value = str.c_str();
-                jstring jValue = env->NewStringUTF(value);
+                std::string str_val = val.get<std::string>();
+                const char *value_cstr = str_val.c_str();
+                jstring jValue = env->NewStringUTF(value_cstr);
 
                 env->SetStaticObjectField(buildClass, fieldID, jValue);
                 if (env->ExceptionCheck()) {
                     env->ExceptionClear();
+                    LOGE("Failed to set field %s", fieldName);
+                    env->DeleteLocalRef(jValue);
                     continue;
                 }
-
-                LOGD("Set '%s' to '%s'", fieldName, value);
+                env->DeleteLocalRef(jValue);
+                LOGD("Set '%s' to '%s'", fieldName, value_cstr);
             }
         }
+        env->DeleteLocalRef(buildClass);
+        env->DeleteLocalRef(versionClass);
     }
 };
 
 static std::vector<char> readFile(const char *path) {
-    FILE *file = fopen(path, "rb");
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) return {};
 
-    if (!file) return {};
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
 
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    std::vector<char> vector(size);
-    fread(vector.data(), 1, size, file);
-
-    fclose(file);
-
-    return vector;
+    std::vector<char> buffer(size);
+    if (file.read(buffer.data(), size)) {
+        return buffer;
+    }
+    return {};
 }
 
 static bool checkOtaZip() {
@@ -437,9 +483,17 @@ static bool checkOtaZip() {
     std::string result;
     bool found = false;
 
+    if (!std::filesystem::exists("/system/etc/security/otacerts.zip")) {
+        LOGD("otacerts.zip not found.");
+        return false;
+    }
+
     std::unique_ptr<FILE, decltype(&pclose)> pipe(
-            popen("unzip -l /system/etc/security/otacerts.zip", "r"), pclose);
-    if (!pipe) return false;
+            popen("unzip -l /system/etc/security/otacerts.zip 2>/dev/null", "r"), pclose);
+    if (!pipe) {
+        LOGE("Failed to popen unzip for otacerts.zip.");
+        return false;
+    }
 
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         result += buffer.data();
@@ -448,28 +502,27 @@ static bool checkOtaZip() {
             break;
         }
     }
-
     return found;
 }
 
 static void companion(int fd) {
 
-    std::vector<char> dex, json;
+    std::vector<char> dex, json_data;
 
     if (std::filesystem::exists(DEX_PATH)) {
         dex = readFile(DEX_PATH);
     }
 
     if (std::filesystem::exists(CUSTOM_JSON)) {
-        json = readFile(CUSTOM_JSON);
+        json_data = readFile(CUSTOM_JSON);
     } else if (std::filesystem::exists(CUSTOM_JSON_FORK)) {
-        json = readFile(CUSTOM_JSON_FORK);
+        json_data = readFile(CUSTOM_JSON_FORK);
     } else if (std::filesystem::exists(DEFAULT_JSON)) {
-        json = readFile(DEFAULT_JSON);
+        json_data = readFile(DEFAULT_JSON);
     }
 
     size_t dexSize = dex.size();
-    size_t jsonSize = json.size();
+    size_t jsonSize = json_data.size();
 
     xwrite(fd, &dexSize, sizeof(size_t));
     xwrite(fd, &jsonSize, sizeof(size_t));
@@ -479,13 +532,13 @@ static void companion(int fd) {
     }
 
     if (jsonSize > 0) {
-        xwrite(fd, json.data(), jsonSize);
+        xwrite(fd, json_data.data(), jsonSize);
     }
 
-    std::string ts(TS_PATH);
-    bool trickyStore = std::filesystem::exists(ts) &&
-                       !std::filesystem::exists(ts + "/disable") &&
-                       !std::filesystem::exists(ts + "/remove");
+    std::string ts_path_str(TS_PATH);
+    bool trickyStore = std::filesystem::exists(ts_path_str) &&
+                       !std::filesystem::exists(ts_path_str + "/disable") &&
+                       !std::filesystem::exists(ts_path_str + "/remove");
     xwrite(fd, &trickyStore, sizeof(bool));
 
     bool testSignedRom = checkOtaZip();
