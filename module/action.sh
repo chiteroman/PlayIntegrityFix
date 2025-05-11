@@ -27,7 +27,11 @@ sleep_pause() {
 
 download_fail() {
 	dl_domain=$(echo "$1" | awk -F[/:] '{print $4}')
+	# If downloading OTA metadata (a .zip URL) fails due to size limit, don't exit immediately.
+	# Allow the script to try parsing what was downloaded.
+	# If parsing fails (fingerprint is empty), then a generic error will be shown.
 	echo "$1" | grep -q "\.zip$" && return
+
 	# Clean up on download fail
 	rm -rf "$TEMPDIR"
 	ping -c 1 -W 5 "$dl_domain" > /dev/null 2>&1 || {
@@ -45,9 +49,31 @@ download_fail() {
 	exit 1
 }
 
-download() { busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2" || download_fail "$1"; }
+# $1: URL, $2: output_file, $3: optional_max_bytes (e.g., "16384")
+download() {
+  local url="$1"
+  local output_file="$2"
+  local max_bytes="$3"
+  
+  if [ -n "$max_bytes" ]; then
+    busybox wget --quota="$max_bytes" -T 10 --no-check-certificate -qO - "$url" > "$output_file" || download_fail "$url"
+  else
+    busybox wget -T 10 --no-check-certificate -qO - "$url" > "$output_file" || download_fail "$url"
+  fi
+}
+
 if command -v curl > /dev/null 2>&1; then
-	download() { curl --connect-timeout 10 -s "$1" > "$2" || download_fail "$1"; }
+  download() {
+    local url="$1"
+    local output_file="$2"
+    local max_bytes="$3" # curl --max-filesize expects bytes as a number
+    
+    if [ -n "$max_bytes" ]; then
+      curl --connect-timeout 10 -s -L --max-filesize "$max_bytes" "$url" > "$output_file" || download_fail "$url"
+    else
+      curl --connect-timeout 10 -s -L "$url" > "$output_file" || download_fail "$url"
+    fi
+  }
 fi
 
 set_random_beta() {
@@ -90,14 +116,15 @@ echo "- Selecting Pixel Beta device ..."
 [ -z "$PRODUCT" ] && set_random_beta
 echo "$MODEL ($PRODUCT)"
 
-# Get device fingerprint and security patch from OTA metadata
-(ulimit -f 2; download "$(echo "$OTA_LIST" | grep "$PRODUCT")" PIXEL_ZIP_METADATA) >/dev/null 2>&1
+# Get device fingerprint and security patch from OTA metadata (downloading only first 16KB)
+METADATA_DOWNLOAD_SIZE="16384" # Bytes (16KB)
+download "$(echo "$OTA_LIST" | grep "$PRODUCT")" PIXEL_ZIP_METADATA "$METADATA_DOWNLOAD_SIZE"
 FINGERPRINT="$(strings PIXEL_ZIP_METADATA | grep -am1 'post-build=' | cut -d= -f2)"
 SECURITY_PATCH="$(strings PIXEL_ZIP_METADATA | grep -am1 'security-patch-level=' | cut -d= -f2)"
 
 # Validate required field to prevent empty pif.json
 if [ -z "$FINGERPRINT" ] || [ -z "$SECURITY_PATCH" ]; then
-	# link to download pixel rom metadata that skipped connection check due to ulimit
+	# This call to download_fail will use a non-.zip URL, so it will exit if it fails.
 	download_fail "https://dl.google.com"
 fi
 
