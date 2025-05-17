@@ -4,6 +4,6 @@ https://t.me/playintegrityfix
 Donations:
 https://www.paypal.com/paypalme/chiteroman0
 
-# v19.0
+# v19.1
 
-- Fix GMS crashes on some devices.
+- Update fingerprint.

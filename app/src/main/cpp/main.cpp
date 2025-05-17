@@ -16,30 +16,52 @@
 #define CUSTOM_JSON_FORK "/data/adb/modules/playintegrityfix/custom.pif.json"
 #define CUSTOM_JSON "/data/adb/pif.json"
 
-static ssize_t xread(int fd, void *buffer, size_t count) {
-    ssize_t total = 0;
-    char *buf = static_cast<char *>(buffer);
-    while (count > 0) {
-        ssize_t ret = TEMP_FAILURE_RETRY(read(fd, buf, count));
-        if (ret < 0) return -1;
-        buf += ret;
-        total += ret;
-        count -= ret;
+static ssize_t xread(int fd, void *buffer, size_t count_to_read) {
+    ssize_t total_read = 0;
+    char *current_buf = static_cast<char *>(buffer);
+    size_t remaining_bytes = count_to_read;
+
+    while (remaining_bytes > 0) {
+        ssize_t ret = TEMP_FAILURE_RETRY(read(fd, current_buf, remaining_bytes));
+
+        if (ret < 0) {
+            return -1;
+        }
+
+        if (ret == 0) {
+            break;
+        }
+
+        current_buf += ret;
+        total_read += ret;
+        remaining_bytes -= ret;
     }
-    return total;
+
+    return total_read;
 }
 
-static ssize_t xwrite(int fd, const void *buffer, size_t count) {
-    ssize_t total = 0;
-    char *buf = (char *) buffer;
-    while (count > 0) {
-        ssize_t ret = TEMP_FAILURE_RETRY(write(fd, buf, count));
-        if (ret < 0) return -1;
-        buf += ret;
-        total += ret;
-        count -= ret;
+static ssize_t xwrite(int fd, const void *buffer, size_t count_to_write) {
+    ssize_t total_written = 0;
+    const char *current_buf = static_cast<const char *>(buffer);
+    size_t remaining_bytes = count_to_write;
+
+    while (remaining_bytes > 0) {
+        ssize_t ret = TEMP_FAILURE_RETRY(write(fd, current_buf, remaining_bytes));
+
+        if (ret < 0) {
+            return -1;
+        }
+
+        if (ret == 0) {
+            break;
+        }
+
+        current_buf += ret;
+        total_written += ret;
+        remaining_bytes -= ret;
     }
-    return total;
+
+    return total_written;
 }
 
 static bool DEBUG = false;
@@ -112,15 +134,17 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        const char *rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
-        const char *rawName = env->GetStringUTFChars(args->nice_name, nullptr);
 
         std::string dir, name;
+
+        auto rawDir = env->GetStringUTFChars(args->app_data_dir, nullptr);
 
         if (rawDir) {
             dir = rawDir;
             env->ReleaseStringUTFChars(args->app_data_dir, rawDir);
         }
+
+        auto rawName = env->GetStringUTFChars(args->nice_name, nullptr);
 
         if (rawName) {
             name = rawName;
@@ -128,7 +152,7 @@ public:
         }
 
         bool isGms = dir.ends_with("/com.google.android.gms");
-        bool isGmsUnstable = name == "com.google.android.gms.unstable";
+        bool isGmsUnstable = isGms && name == "com.google.android.gms.unstable";
 
         if (!isGms) {
             api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
@@ -158,7 +182,6 @@ public:
         if (jsonSize > 0) {
             jsonStr.resize(jsonSize);
             jsonSize = xread(fd, jsonStr.data(), jsonSize);
-            jsonStr[jsonSize] = '\0';
             json = nlohmann::json::parse(jsonStr, nullptr, false, true);
         }
 
@@ -188,7 +211,8 @@ public:
     }
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
-        if (dexVector.empty() || json.empty()) return;
+        if (dexVector.empty() || json.empty())
+            return;
 
         UpdateBuildFields();
 
