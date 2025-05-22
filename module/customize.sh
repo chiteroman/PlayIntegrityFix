@@ -14,13 +14,14 @@ fi
 
 check_zygisk() {
     local ZYGISK_MODULE="/data/adb/modules/zygisksu"
+    local REZYGISK_MODULE="/data/adb/modules/rezygisk"
     local MAGISK_DIR="/data/adb/magisk"
     local ZYGISK_MSG="Zygisk is not enabled. Please either:
     - Enable Zygisk in Magisk settings
     - Install ZygiskNext or ReZygisk module"
 
     # Check if Zygisk module directory exists
-    if [ -d "$ZYGISK_MODULE" ]; then
+    if [ -d "$ZYGISK_MODULE" ] || [ -d "$REZYGISK_MODULE" ]; then
         return 0
     fi
 
